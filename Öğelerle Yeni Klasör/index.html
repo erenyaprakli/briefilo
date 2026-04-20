@@ -1,0 +1,1903 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Briefio — Markanız İçin Gerçek İçerik</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #fffdf9;
+  --surface: #f5f3ee;
+  --surface2: #ede9e1;
+  --border: #e0dbd0;
+  --text: #1a1612;
+  --muted: #8a8070;
+
+  --primary:   #f97316;
+  --primary2:  #ea580c;
+  --primary3:  #fbbf24;
+  --glow:      rgba(249,115,22,0.12);
+  --glow2:     rgba(234,88,12,0.07);
+
+  --green: #059669;
+  --blue:  #3b82f6;
+
+  --r: 14px;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Montserrat', sans-serif;
+  overflow-x: hidden;
+  cursor: none;
+}
+
+/* ── CURSOR ── */
+.cursor {
+  width:9px; height:9px; background:var(--primary); border-radius:50%;
+  position:fixed; pointer-events:none; z-index:99999;
+  transform:translate(-50%,-50%); transition:transform .15s, background .2s;
+}
+.cursor-ring {
+  width:34px; height:34px; border:1.5px solid rgba(255,179,71,.35); border-radius:50%;
+  position:fixed; pointer-events:none; z-index:99998;
+  transform:translate(-50%,-50%); transition:all .12s ease;
+}
+
+/* ── NOISE ── */
+body::after { display:none; }
+
+/* ── NAV ── */
+nav {
+  position:fixed; top:0; left:0; right:0; z-index:1000;
+  padding:0 6%; display:flex; align-items:center; justify-content:space-between;
+  height:70px;
+  background:rgba(255,253,249,.85); backdrop-filter:blur(28px);
+  border-bottom:1px solid var(--border);
+  box-shadow:0 1px 0 rgba(0,0,0,.04);
+  transition:background .3s;
+}
+.nav-logo {
+  display:flex; align-items:center; gap:9px;
+  font-family:'Fraunces', serif; font-size:22px; font-weight:700;
+  text-decoration:none; color:var(--text); letter-spacing:-.3px;
+}
+.nav-logo-ic {
+  width:34px; height:34px; border-radius:9px;
+  background:linear-gradient(135deg, var(--primary), var(--primary2));
+  display:flex; align-items:center; justify-content:center; font-size:16px;
+}
+.nav-links { display:flex; align-items:center; gap:34px; list-style:none; }
+.nav-links a {
+  text-decoration:none; color:var(--muted); font-size:14px; font-weight:500;
+  transition:color .2s; position:relative;
+}
+.nav-links a::after {
+  content:''; position:absolute; bottom:-4px; left:0; right:0;
+  height:1.5px; background:var(--primary); transform:scaleX(0);
+  transition:transform .25s; border-radius:2px;
+}
+.nav-links a:hover { color:var(--text); }
+.nav-links a:hover::after { transform:scaleX(1); }
+.nav-cta { display:flex; align-items:center; gap:10px; }
+
+.btn-ghost {
+  padding:9px 20px; border-radius:9px; border:1px solid var(--border);
+  background:transparent; color:var(--muted); font-size:13.5px; font-weight:600;
+  cursor:pointer; transition:all .2s; font-family:'Montserrat',sans-serif;
+  text-decoration:none; display:inline-block;
+}
+.btn-ghost:hover { border-color:rgba(255,255,255,.2); color:var(--text); background:rgba(255,255,255,.04); }
+
+.btn-primary {
+  padding:9px 22px; border-radius:9px; border:none;
+  background:linear-gradient(135deg, var(--primary), var(--primary2));
+  color:#fff; font-size:13.5px; font-weight:700; cursor:pointer;
+  transition:all .22s; font-family:'Montserrat',sans-serif;
+  box-shadow:0 4px 20px rgba(249,115,22,.22);
+  text-decoration:none; display:inline-block;
+}
+.btn-primary:hover { transform:translateY(-1px); box-shadow:0 6px 28px rgba(255,179,71,.4); }
+
+/* ── HERO ── */
+.hero {
+  min-height:100vh; display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  text-align:center; padding:120px 6% 80px; overflow:hidden; position:relative;
+}
+
+.orb {
+  position:absolute; border-radius:50%; filter:blur(90px); pointer-events:none;
+}
+.orb-1 { width:640px; height:640px; background:rgba(249,115,22,.08); top:-180px; left:-200px; }
+.orb-2 { width:480px; height:480px; background:rgba(234,88,12,.06); bottom:-100px; right:-120px; }
+.orb-3 { width:360px; height:360px; background:rgba(251,191,36,.05); top:45%; left:50%; transform:translateX(-50%); }
+
+.hero-badge {
+  display:inline-flex; align-items:center; gap:8px;
+  background:rgba(255,179,71,.08); border:1px solid rgba(255,179,71,.2);
+  border-radius:100px; padding:7px 16px; font-size:12.5px; font-weight:600;
+  color:var(--primary3); margin-bottom:30px;
+  animation:fadeUp .6s ease both;
+}
+.badge-dot { width:6px; height:6px; background:var(--primary); border-radius:50%; animation:pulse 2s infinite; }
+
+.hero-title {
+  font-family:'Fraunces', serif;
+  font-size:clamp(50px, 7.5vw, 102px);
+  font-weight:900; line-height:1.0; letter-spacing:-2.5px;
+  margin-bottom:26px; animation:fadeUp .6s .08s ease both;
+}
+.hero-title .l1 { display:block; color:var(--text); }
+.hero-title .l2 {
+  display:block; font-style:italic;
+  background:linear-gradient(120deg, var(--primary) 0%, var(--primary3) 45%, var(--primary2) 100%);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+}
+.hero-title .l3 { display:block; color:rgba(242,240,235,.28); }
+
+.hero-sub {
+  max-width:580px; margin:0 auto 42px;
+  font-size:18px; color:var(--muted); line-height:1.75; font-weight:400;
+  animation:fadeUp .6s .16s ease both;
+}
+
+.hero-actions {
+  display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap;
+  margin-bottom:68px; animation:fadeUp .6s .22s ease both;
+}
+
+.btn-hero {
+  padding:15px 34px; border-radius:11px; border:none;
+  background:linear-gradient(135deg, var(--primary), var(--primary2));
+  color:#fff; font-size:15px; font-weight:800; cursor:pointer;
+  transition:all .22s; font-family:'Montserrat',sans-serif;
+  box-shadow:0 6px 32px rgba(255,179,71,.35); letter-spacing:-.2px;
+  text-decoration:none; display:inline-block;
+}
+.btn-hero:hover { transform:translateY(-2px); box-shadow:0 10px 44px rgba(255,179,71,.5); }
+
+.btn-hero-ghost {
+  padding:15px 28px; border-radius:11px;
+  border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.03);
+  color:rgba(242,240,235,.8); font-size:15px; font-weight:600; cursor:pointer;
+  transition:all .22s; font-family:'Montserrat',sans-serif;
+  text-decoration:none; display:inline-flex; align-items:center; gap:8px;
+}
+.btn-hero-ghost:hover { background:rgba(255,255,255,.07); border-color:rgba(255,255,255,.2); }
+
+.hero-stats {
+  display:flex; align-items:center; justify-content:center; gap:52px; flex-wrap:wrap;
+  animation:fadeUp .6s .3s ease both;
+}
+.hero-stat { text-align:center; }
+.hero-stat-val {
+  font-family:'Montserrat',sans-serif; font-size:34px; font-weight:700;
+  color:var(--text); letter-spacing:-.5px;
+}
+.hero-stat-lbl { font-size:13px; color:var(--muted); margin-top:5px; font-weight:500; }
+.stat-div { width:1px; height:44px; background:var(--border); }
+
+/* ── MARQUEE ── */
+.marquee-wrap {
+  overflow:hidden; border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+  padding:18px 0; background:var(--surface);
+}
+.marquee-track {
+  display:flex; animation:marquee 32s linear infinite; width:max-content;
+}
+.marquee-item {
+  display:flex; align-items:center; gap:12px; padding:0 40px;
+  font-size:13.5px; font-weight:600; color:var(--muted); white-space:nowrap;
+  border-right:1px solid var(--border);
+}
+.marquee-item em { color:var(--primary); font-style:normal; }
+
+@keyframes marquee { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+
+/* ── SECTIONS ── */
+.section-pad { padding:120px 6%; }
+
+.section-tag {
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:11.5px; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+  color:var(--primary); margin-bottom:18px;
+}
+.section-tag::before { content:''; width:22px; height:2px; background:var(--primary); border-radius:2px; }
+
+.section-title {
+  font-family:'Fraunces', serif;
+  font-size:clamp(34px, 4vw, 58px);
+  font-weight:800; line-height:1.08; letter-spacing:-1.2px;
+  margin-bottom:20px;
+}
+.section-sub {
+  font-size:17px; color:var(--muted); line-height:1.75; font-weight:400;
+  max-width:520px;
+}
+
+/* ── HOW IT WORKS ── */
+.hiw-grid {
+  display:grid; grid-template-columns:repeat(3,1fr);
+  gap:0; margin-top:72px;
+  border:1px solid var(--border); border-radius:20px; overflow:hidden;
+}
+.hiw-step {
+  background:var(--surface); padding:48px 38px;
+  position:relative; transition:background .3s;
+  border-right:1px solid var(--border);
+}
+.hiw-step:last-child { border-right:none; }
+.hiw-step:hover { background:var(--surface2); }
+
+.hiw-num {
+  font-family:'Montserrat',sans-serif; font-size:80px; font-weight:900;
+  color:rgba(255,255,255,.03); position:absolute; top:20px; right:28px; line-height:1;
+}
+.hiw-icon {
+  width:54px; height:54px; border-radius:14px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:24px; margin-bottom:22px;
+}
+.ic-amber { background:rgba(255,179,71,.12); }
+.ic-orange { background:rgba(255,140,66,.12); }
+.ic-green { background:rgba(45,212,160,.12); }
+
+.hiw-step-title {
+  font-family:'Montserrat',sans-serif; font-size:21px; font-weight:700;
+  margin-bottom:12px; letter-spacing:-.3px;
+}
+.hiw-step-desc { font-size:14.5px; color:var(--muted); line-height:1.75; }
+
+/* ── FEATURE SPLIT ── */
+.feature-split {
+  display:grid; grid-template-columns:1fr 1fr; gap:80px; align-items:center;
+}
+.feature-split.rev { direction:rtl; }
+.feature-split.rev > * { direction:ltr; }
+
+.feature-visual {
+  border-radius:20px; overflow:hidden; border:1px solid var(--border);
+  background:var(--surface);
+}
+.feature-mockup { padding:26px; }
+
+.mock-topbar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding-bottom:18px; margin-bottom:18px; border-bottom:1px solid var(--border);
+}
+.mock-title { font-family:'Montserrat',sans-serif; font-size:15px; font-weight:700; }
+.mock-btn {
+  padding:6px 13px; border-radius:7px;
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff; font-size:11.5px; font-weight:700;
+}
+.mock-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin-bottom:16px; }
+.mock-stat {
+  background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:13px 12px;
+}
+.mock-stat-val { font-family:'Montserrat',sans-serif; font-size:21px; font-weight:700; margin-bottom:3px; }
+.mock-stat-lbl { font-size:10px; color:var(--muted); font-weight:500; }
+
+.mock-card {
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:10px; padding:13px; margin-bottom:9px;
+}
+.mock-card:last-child { margin-bottom:0; }
+.mock-card-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:9px; }
+.mock-card-title { font-size:12px; font-weight:600; }
+.mpill {
+  font-size:9.5px; font-weight:700; padding:2px 8px; border-radius:5px;
+}
+.mp-green { background:rgba(45,212,160,.12); color:var(--green); }
+.mp-amber { background:rgba(255,179,71,.12); color:var(--primary); }
+.mock-bar { height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; }
+.mock-bar-fill { height:100%; border-radius:2px; }
+
+/* creator mini */
+.creator-cards { display:grid; grid-template-columns:1fr 1fr; gap:11px; padding:26px; }
+.creator-mini {
+  background:var(--bg); border:1px solid var(--border); border-radius:12px;
+  padding:18px 14px; text-align:center; transition:all .2s;
+}
+.creator-mini:hover { border-color:rgba(255,179,71,.3); transform:translateY(-2px); }
+.creator-mini-av {
+  width:42px; height:42px; border-radius:50%; margin:0 auto 10px;
+  display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px;
+}
+.creator-mini-name { font-size:12px; font-weight:700; margin-bottom:2px; }
+.creator-mini-niche { font-size:10px; color:var(--muted); margin-bottom:8px; }
+.creator-mini-rate { font-family:'Montserrat',sans-serif; font-size:16px; font-weight:700; color:var(--primary); }
+.creator-mini-stars { font-size:10px; color:var(--primary); margin-top:2px; }
+
+.feature-list { margin-top:32px; display:flex; flex-direction:column; gap:22px; }
+.feature-item { display:flex; align-items:flex-start; gap:16px; }
+.feature-item-ico {
+  width:42px; height:42px; border-radius:11px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:19px;
+  background:rgba(255,179,71,.08); border:1px solid rgba(255,179,71,.14);
+}
+.feature-item-title { font-size:15px; font-weight:700; margin-bottom:4px; }
+.feature-item-desc { font-size:14px; color:var(--muted); line-height:1.7; }
+
+/* ── PACKAGES ── */
+.packages-bg { background:var(--surface); }
+
+.pkg-grid {
+  display:grid; grid-template-columns:repeat(4,1fr);
+  gap:0; margin-top:64px;
+  border:1px solid var(--border); border-radius:20px; overflow:hidden;
+}
+.pkg {
+  background:var(--bg); padding:38px 28px;
+  border-right:1px solid var(--border); position:relative; transition:background .3s;
+}
+.pkg:last-child { border-right:none; }
+.pkg:hover { background:var(--surface2); }
+.pkg.featured {
+  background:linear-gradient(160deg, rgba(255,179,71,.07) 0%, var(--bg) 70%);
+}
+.pkg.featured:hover {
+  background:linear-gradient(160deg, rgba(255,179,71,.12) 0%, var(--surface2) 70%);
+}
+.pkg-top-badge {
+  position:absolute; top:-1px; left:50%; transform:translateX(-50%);
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff; font-size:10px; font-weight:800;
+  padding:4px 14px; border-radius:0 0 10px 10px; letter-spacing:.6px; white-space:nowrap;
+}
+.pkg-name {
+  font-family:'Montserrat',sans-serif; font-size:17px; font-weight:700;
+  margin-bottom:5px; letter-spacing:-.2px;
+}
+.pkg-count { font-size:13px; color:var(--muted); margin-bottom:22px; font-weight:500; }
+.pkg-price-wrap { margin-bottom:6px; display:flex; align-items:flex-start; gap:2px; }
+.pkg-currency { font-family:'Montserrat',sans-serif; font-size:20px; font-weight:700; margin-top:8px; }
+.pkg-amount { font-family:'Montserrat',sans-serif; font-size:50px; font-weight:900; line-height:1; letter-spacing:-2px; }
+.pkg-unit { font-size:12.5px; color:var(--muted); margin-bottom:16px; }
+.pkg-save {
+  display:inline-block; font-size:11px; font-weight:700; padding:3px 9px;
+  border-radius:6px; margin-bottom:22px;
+  background:rgba(45,212,160,.1); color:var(--green);
+}
+.pkg-features-list { list-style:none; margin-bottom:28px; }
+.pkg-feature {
+  display:flex; align-items:center; gap:10px; font-size:13.5px; padding:8px 0;
+  border-bottom:1px solid var(--border); color:var(--text); font-weight:500;
+}
+.pkg-feature:last-child { border-bottom:none; }
+.pkg-feature .inactive { color:var(--muted); }
+.ck { color:var(--green); font-weight:800; flex-shrink:0; }
+.nx { color:#bbb; flex-shrink:0; }
+
+.pkg-cta {
+  width:100%; padding:13px; border-radius:10px; border:none;
+  font-size:14px; font-weight:700; cursor:pointer; font-family:'Montserrat',sans-serif;
+  transition:all .2s; letter-spacing:-.1px;
+}
+.pkg-cta-ghost {
+  background:transparent; border:1px solid var(--border); color:var(--muted);
+}
+.pkg-cta-ghost:hover { border-color:rgba(255,255,255,.18); color:var(--text); }
+.pkg-cta-main {
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff; box-shadow:0 4px 20px rgba(255,179,71,.3);
+}
+.pkg-cta-main:hover { transform:translateY(-1px); box-shadow:0 6px 28px rgba(255,179,71,.46); }
+
+/* ── TESTIMONIALS ── */
+.testi-grid {
+  display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:64px;
+}
+.testi {
+  background:var(--surface); border:1px solid var(--border); border-radius:18px;
+  padding:32px 28px; transition:all .25s;
+}
+.testi:hover { border-color:rgba(255,179,71,.2); transform:translateY(-4px); }
+.testi-quote {
+  font-family:'Montserrat',sans-serif; font-size:44px; font-weight:900; line-height:1;
+  color:var(--primary); margin-bottom:14px;
+}
+.testi-text {
+  font-size:15px; line-height:1.75; color:rgba(242,240,235,.7);
+  margin-bottom:24px; font-style:italic; font-weight:400;
+}
+.testi-author { display:flex; align-items:center; gap:12px; }
+.tav {
+  width:42px; height:42px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px;
+}
+.tav-name { font-size:14px; font-weight:700; }
+.tav-role { font-size:12px; color:var(--muted); margin-top:1px; }
+.tav-stars { font-size:12px; color:var(--primary); margin-top:3px; }
+
+/* ── CREATORS SCROLL ── */
+.creators-scroll {
+  display:flex; gap:18px; margin-top:56px;
+  overflow-x:auto; padding-bottom:14px; scrollbar-width:none;
+}
+.creators-scroll::-webkit-scrollbar { display:none; }
+.creator-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:18px;
+  padding:28px 22px; min-width:210px; flex-shrink:0;
+  transition:all .22s; text-align:center;
+}
+.creator-card:hover { border-color:rgba(255,179,71,.25); transform:translateY(-4px); }
+.creator-av-lg {
+  width:58px; height:58px; border-radius:50%; margin:0 auto 13px;
+  display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px;
+}
+.creator-cname { font-family:'Montserrat',sans-serif; font-size:16px; font-weight:700; margin-bottom:4px; letter-spacing:-.2px; }
+.creator-cniche { font-size:12px; color:var(--muted); margin-bottom:13px; font-weight:500; }
+.creator-stats { display:flex; justify-content:center; gap:22px; margin-bottom:14px; }
+.cstat-val { font-family:'Montserrat',sans-serif; font-size:17px; font-weight:700; }
+.cstat-lbl { font-size:10px; color:var(--muted); font-weight:500; }
+.creator-tags { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+.creator-tag {
+  font-size:10px; font-weight:600; padding:3px 9px; border-radius:6px;
+  background:rgba(255,179,71,.08); color:var(--primary); border:1px solid rgba(255,179,71,.15);
+}
+
+/* ── BRANDS ── */
+.brands-row {
+  display:flex; align-items:center; justify-content:center;
+  gap:48px; flex-wrap:wrap; margin-top:48px;
+}
+.brand-logo {
+  font-family:'Montserrat',sans-serif; font-size:18px; font-weight:700;
+  color:rgba(255,255,255,.14); transition:color .25s; cursor:default; letter-spacing:-.3px;
+}
+.brand-logo:hover { color:rgba(255,255,255,.35); }
+
+/* ── CTA BANNER ── */
+.cta-section {
+  margin:0 6% 120px; border-radius:24px;
+  background:linear-gradient(135deg,rgba(255,179,71,.09) 0%,rgba(255,140,66,.06) 50%,rgba(255,213,128,.04) 100%);
+  border:1px solid rgba(255,179,71,.16); padding:80px 60px; text-align:center; overflow:hidden; position:relative;
+}
+.cta-section::before {
+  content:''; position:absolute; top:-80px; left:50%; transform:translateX(-50%);
+  width:420px; height:420px; border-radius:50%;
+  background:rgba(255,179,71,.07); filter:blur(70px); pointer-events:none;
+}
+.cta-title {
+  font-family:'Montserrat',sans-serif;
+  font-size:clamp(34px,4.5vw,60px); font-weight:900; letter-spacing:-1.5px;
+  margin-bottom:16px; position:relative;
+}
+.hl { color:var(--primary); }
+.cta-sub {
+  font-size:17px; color:var(--muted); line-height:1.75; max-width:500px;
+  margin:0 auto 40px; font-weight:400;
+}
+.cta-actions { display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; }
+
+/* ── FAQ ── */
+.faq-list { margin-top:52px; max-width:720px; margin-left:auto; margin-right:auto; }
+.faq-item { border-bottom:1px solid var(--border); }
+.faq-question {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:22px 0; cursor:pointer; font-size:16px; font-weight:600;
+  transition:color .2s; user-select:none;
+}
+.faq-question:hover { color:var(--primary); }
+.faq-icon {
+  width:28px; height:28px; border-radius:50%; border:1.5px solid var(--border);
+  display:flex; align-items:center; justify-content:center; font-size:18px;
+  flex-shrink:0; transition:all .3s; color:var(--muted);
+}
+.faq-item.open .faq-icon { transform:rotate(45deg); border-color:var(--primary); color:var(--primary); }
+.faq-answer {
+  max-height:0; overflow:hidden; transition:max-height .4s ease, padding .3s;
+  font-size:14.5px; color:var(--muted); line-height:1.8; font-weight:400;
+}
+.faq-item.open .faq-answer { max-height:200px; padding-bottom:22px; }
+
+/* ── FOOTER ── */
+footer {
+  background:var(--surface); border-top:1px solid var(--border); padding:72px 6% 32px;
+}
+.footer-top {
+  display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:60px; margin-bottom:60px;
+}
+.footer-logo {
+  display:flex; align-items:center; gap:9px; font-family:'Montserrat',sans-serif;
+  font-size:20px; font-weight:700; margin-bottom:15px; text-decoration:none; color:var(--text);
+}
+.footer-desc { font-size:14px; color:var(--muted); line-height:1.75; max-width:280px; font-weight:400; }
+.footer-col-title { font-size:13px; font-weight:700; margin-bottom:18px; color:var(--text); letter-spacing:.2px; }
+.footer-links { list-style:none; display:flex; flex-direction:column; gap:12px; }
+.footer-links a { font-size:14px; color:var(--muted); text-decoration:none; transition:color .2s; font-weight:500; }
+.footer-links a:hover { color:var(--text); }
+.footer-bottom {
+  display:flex; align-items:center; justify-content:space-between;
+  padding-top:28px; border-top:1px solid var(--border);
+  font-size:13px; color:var(--muted); flex-wrap:wrap; gap:12px; font-weight:500;
+}
+.social-links { display:flex; gap:10px; }
+.social-link {
+  width:36px; height:36px; border-radius:9px;
+  border:1px solid var(--border); display:flex; align-items:center; justify-content:center;
+  font-size:15px; cursor:pointer; transition:all .2s; text-decoration:none; background:transparent;
+}
+.social-link:hover { border-color:rgba(255,255,255,.18); background:rgba(255,255,255,.04); }
+
+/* ── REVEAL ANIMATION ── */
+.reveal { opacity:0; transform:translateY(36px); transition:opacity .7s ease, transform .7s ease; }
+.reveal.visible { opacity:1; transform:translateY(0); }
+
+/* ── KEYFRAMES ── */
+@keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+@keyframes marquee { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+
+.floating { animation:float 5.5s ease-in-out infinite; }
+.floating-2 { animation:float 6.5s 1.2s ease-in-out infinite; }
+
+/* ── MOBILE ── */
+@media(max-width:768px) {
+  .nav-links { display:none; }
+  .hero-title { font-size:clamp(40px,11vw,64px); letter-spacing:-1.5px; }
+  .hiw-grid, .pkg-grid, .testi-grid, .feature-split, .footer-top { grid-template-columns:1fr; }
+  .feature-split.rev { direction:ltr; }
+  .hiw-step { border-right:none; border-bottom:1px solid var(--border); }
+  .hiw-step:last-child { border-bottom:none; }
+  .section-pad { padding:80px 5%; }
+  .cta-section { padding:48px 28px; margin:0 4% 80px; }
+  .hero-stats { gap:24px; }
+  .stat-div { display:none; }
+}
+</style>
+</head>
+<body>
+
+<div class="cursor" id="cursor"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+
+<!-- ══════════ NAV ══════════ -->
+<nav id="navbar">
+  <a href="#" class="nav-logo">
+    <div class="nav-logo-ic">✦</div>
+    briefio
+  </a>
+  <ul class="nav-links">
+    <li><a href="#how">Nasıl Çalışır</a></li>
+    <li><a href="#features">Özellikler</a></li>
+    <li><a href="#packages">Paketler</a></li>
+    <li><a href="#creators">Creator'lar</a></li>
+    <li><a href="#faq">SSS</a></li>
+  </ul>
+  <div class="nav-cta">
+    <a href="ugc-platform.html" class="btn-ghost">Giriş Yap</a>
+    <a href="ugc-platform.html" class="btn-primary">Ücretsiz Başla</a>
+  </div>
+</nav>
+
+<!-- ══════════ HERO ══════════ -->
+<section class="hero" id="home">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <div class="hero-badge">
+    <div class="badge-dot"></div>
+    Türkiye'nin #1 UGC Platformu
+  </div>
+
+  <h1 class="hero-title">
+    <span class="l1">Markanız İçin</span>
+    <span class="l2">Gerçek İçerik,</span>
+    <span class="l3">Gerçek Sonuçlar.</span>
+  </h1>
+
+  <p class="hero-sub">
+    156 profesyonel creator ile saniyeler içinde eşleşin. Brief verin, içeriği onaylayın, işinize bakın. UGC içerik üretimi hiç bu kadar kolay olmamıştı.
+  </p>
+
+  <div class="hero-actions">
+    <a href="ugc-platform.html" class="btn-hero">Hemen Sipariş Ver →</a>
+    <a href="#how" class="btn-hero-ghost">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+      Nasıl Çalışır?
+    </a>
+  </div>
+
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="hero-stat-val" style="color:var(--primary)">156</div>
+      <div class="hero-stat-lbl">Aktif Creator</div>
+    </div>
+    <div class="stat-div"></div>
+    <div class="hero-stat">
+      <div class="hero-stat-val">2.400+</div>
+      <div class="hero-stat-lbl">Teslim Edilen İçerik</div>
+    </div>
+    <div class="stat-div"></div>
+    <div class="hero-stat">
+      <div class="hero-stat-val" style="color:var(--primary)">4.9★</div>
+      <div class="hero-stat-lbl">Marka Memnuniyeti</div>
+    </div>
+    <div class="stat-div"></div>
+    <div class="hero-stat">
+      <div class="hero-stat-val">7 Gün</div>
+      <div class="hero-stat-lbl">Ortalama Teslimat</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ MARQUEE ══════════ -->
+<div class="marquee-wrap">
+  <div class="marquee-track">
+    <div class="marquee-item">🎬 <em>UGC Video</em> TikTok & Reels</div>
+    <div class="marquee-item">📸 <em>Fotoğraf Paketleri</em> Ürün & Lifestyle</div>
+    <div class="marquee-item">⚡ <em>Hızlı Teslimat</em> 7 Gün Garanti</div>
+    <div class="marquee-item">🎯 <em>Niş Eşleşme</em> Akıllı Algoritma</div>
+    <div class="marquee-item">🔒 <em>Güvenli Ödeme</em> İçerik Onayına Kadar</div>
+    <div class="marquee-item">⭐ <em>4.9 Puan</em> 284 Marka</div>
+    <div class="marquee-item">🚀 <em>Ölçeklenebilir</em> 1'den 100'e Paket</div>
+    <div class="marquee-item">🎬 <em>UGC Video</em> TikTok & Reels</div>
+    <div class="marquee-item">📸 <em>Fotoğraf Paketleri</em> Ürün & Lifestyle</div>
+    <div class="marquee-item">⚡ <em>Hızlı Teslimat</em> 7 Gün Garanti</div>
+    <div class="marquee-item">🎯 <em>Niş Eşleşme</em> Akıllı Algoritma</div>
+    <div class="marquee-item">🔒 <em>Güvenli Ödeme</em> İçerik Onayına Kadar</div>
+    <div class="marquee-item">⭐ <em>4.9 Puan</em> 284 Marka</div>
+    <div class="marquee-item">🚀 <em>Ölçeklenebilir</em> 1'den 100'e Paket</div>
+  </div>
+</div>
+
+<!-- ══════════ HOW IT WORKS ══════════ -->
+<section class="section-pad" id="how">
+  <div class="reveal">
+    <div class="section-tag">Nasıl Çalışır</div>
+    <h2 class="section-title">Üç adımda<br><em style="font-style:italic">profesyonel içerik.</em></h2>
+    <p class="section-sub">Karmaşık ajans süreçlerine son. Brief verin, creator atansın, içeriği onaylayın.</p>
+  </div>
+
+  <div class="hiw-grid reveal">
+    <div class="hiw-step">
+      <div class="hiw-num">01</div>
+      <div class="hiw-icon ic-amber">📋</div>
+      <div class="hiw-step-title">Paket Seç & Brief Ver</div>
+      <div class="hiw-step-desc">İhtiyacınıza uygun paketi seçin. Ürününüzü, hedef kitlenizi ve beklentilerinizi anlatın. Sadece 5 dakika yeterli.</div>
+    </div>
+    <div class="hiw-step">
+      <div class="hiw-num">02</div>
+      <div class="hiw-icon ic-orange">🎬</div>
+      <div class="hiw-step-title">Creator Üretir</div>
+      <div class="hiw-step-desc">Niş eşleşme algoritmamız en uygun creator'ı atar. Creator brief'i inceleyip içeriği üretir. Siz sadece beklersiniz.</div>
+    </div>
+    <div class="hiw-step">
+      <div class="hiw-num">03</div>
+      <div class="hiw-icon ic-green">✅</div>
+      <div class="hiw-step-title">Onayla & İndir</div>
+      <div class="hiw-step-desc">İçeriği inceleyin, onaylayın ve HD formatında indirin. Memnun değilseniz ücretsiz revizyon hakkınız var.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ VIDEO DEMO ══════════ -->
+<section class="section-pad" style="background:#fff;padding-top:0">
+  <div class="reveal" style="text-align:center;margin-bottom:48px">
+    <div class="section-tag" style="justify-content:center">Canlı Demo</div>
+    <h2 class="section-title">Görmek inanmaktır.</h2>
+    <p class="section-sub" style="margin:0 auto;color:#555">Sipariş vermekten içerik teslim almaya kadar tüm süreç bu kadar kolay.</p>
+  </div>
+
+  <div class="reveal" style="max-width:860px;margin:0 auto;position:relative">
+    <!-- Video wrapper -->
+    <div id="demoBox" style="border-radius:20px;overflow:hidden;border:1px solid #e8e3d8;box-shadow:0 24px 64px rgba(0,0,0,.1);background:#0f0f14;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative" onclick="playDemo()">
+
+      <!-- Fake thumbnail -->
+      <div id="demoThumb" style="position:absolute;inset:0;background:linear-gradient(135deg,#1a1612 0%,#2a2218 50%,#1a1612 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0">
+        <!-- Fake screen UI inside thumbnail -->
+        <div style="width:72%;background:#111;border-radius:12px;padding:16px;border:1px solid #333;margin-bottom:0">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <div style="width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#f97316,#ea580c);display:flex;align-items:center;justify-content:center;font-size:13px">✦</div>
+            <span style="color:#fff;font-weight:700;font-size:13px">briefio</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+            <div style="background:#1e1e1e;border-radius:7px;padding:10px;text-align:center"><div style="color:#f97316;font-weight:800;font-size:16px">12</div><div style="color:#666;font-size:9px">Sipariş</div></div>
+            <div style="background:#1e1e1e;border-radius:7px;padding:10px;text-align:center"><div style="color:#059669;font-weight:800;font-size:16px">4</div><div style="color:#666;font-size:9px">Üretimde</div></div>
+            <div style="background:#1e1e1e;border-radius:7px;padding:10px;text-align:center"><div style="color:#fff;font-weight:800;font-size:16px">₺48K</div><div style="color:#666;font-size:9px">Harcama</div></div>
+          </div>
+          <div style="background:#1e1e1e;border-radius:7px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+            <span style="color:#ccc;font-size:10px">Yaz Koleksiyonu 5x Video</span>
+            <span style="background:rgba(5,150,105,.2);color:#059669;font-size:8px;padding:2px 7px;border-radius:4px;font-weight:700">Üretimde</span>
+          </div>
+          <div style="background:#1e1e1e;border-radius:7px;padding:10px;display:flex;justify-content:space-between;align-items:center">
+            <span style="color:#ccc;font-size:10px">Unboxing Reels 2x</span>
+            <span style="background:rgba(249,115,22,.2);color:#f97316;font-size:8px;padding:2px 7px;border-radius:4px;font-weight:700">Onay Bekliyor</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Play button -->
+      <div id="playBtn" style="position:absolute;width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#f97316,#ea580c);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(249,115,22,.5);transition:transform .2s;z-index:10">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </div>
+
+      <!-- Hover effect -->
+      <div style="position:absolute;inset:0;background:rgba(249,115,22,.04);opacity:0;transition:opacity .2s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0"></div>
+    </div>
+
+    <!-- Animated demo player (shown on click) -->
+    <div id="demoPlayer" style="display:none;border-radius:20px;overflow:hidden;border:1px solid #e8e3d8;box-shadow:0 24px 64px rgba(0,0,0,.1);background:#fff">
+      <!-- Browser bar -->
+      <div style="background:#f5f3ee;padding:10px 18px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #e8e3d8">
+        <div style="display:flex;gap:6px">
+          <div style="width:11px;height:11px;border-radius:50%;background:#ff5f57"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#ffbd2e"></div>
+          <div style="width:11px;height:11px;border-radius:50%;background:#28ca42"></div>
+        </div>
+        <div style="flex:1;background:#e8e3d8;border-radius:6px;padding:5px 12px;font-size:12px;color:#888;text-align:center">briefio.com/panel</div>
+        <button onclick="replayDemo()" id="replayBtn" style="display:none;padding:4px 12px;border-radius:6px;border:1px solid #e8e3d8;background:#fff;font-size:11px;font-weight:700;cursor:pointer;color:var(--primary);font-family:'Montserrat',sans-serif;transition:all .2s">↺ Tekrar</button>
+      </div>
+
+      <!-- Step label bar -->
+      <div style="display:flex;border-bottom:1px solid #e8e3d8;background:#fafaf8">
+        <div class="dlabel" id="dl0" style="flex:1;padding:10px;text-align:center;font-size:11px;font-weight:700;color:var(--primary);border-bottom:2px solid var(--primary)">① Sipariş</div>
+        <div class="dlabel" id="dl1" style="flex:1;padding:10px;text-align:center;font-size:11px;font-weight:700;color:#ccc;border-bottom:2px solid transparent">② Brief</div>
+        <div class="dlabel" id="dl2" style="flex:1;padding:10px;text-align:center;font-size:11px;font-weight:700;color:#ccc;border-bottom:2px solid transparent">③ Creator</div>
+        <div class="dlabel" id="dl3" style="flex:1;padding:10px;text-align:center;font-size:11px;font-weight:700;color:#ccc;border-bottom:2px solid transparent">④ Üretim</div>
+        <div class="dlabel" id="dl4" style="flex:1;padding:10px;text-align:center;font-size:11px;font-weight:700;color:#ccc;border-bottom:2px solid transparent">⑤ Teslim</div>
+      </div>
+
+      <div style="padding:28px;min-height:300px">
+
+        <!-- STEP 0: Sipariş -->
+        <div id="step-0" class="demo-step" style="display:block">
+          <div style="font-size:12px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:18px">Marka sipariş oluşturuyor</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+            <div style="border:1.5px solid #eee;border-radius:12px;padding:14px;opacity:.35;transition:all .3s">
+              <div style="font-size:12px;font-weight:700;margin-bottom:3px">Başlangıç</div>
+              <div style="font-size:11px;color:#888">1 içerik</div>
+            </div>
+            <div style="border:2px solid var(--primary);border-radius:12px;padding:14px;background:rgba(249,115,22,.05);position:relative">
+              <div style="position:absolute;top:-9px;left:12px;background:var(--primary);color:#fff;font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px">EN POPÜLER</div>
+              <div style="font-size:12px;font-weight:700;margin-bottom:3px;color:var(--primary)">Profesyonel ✓</div>
+              <div style="font-size:11px;color:#888">5 içerik · 5 gün</div>
+            </div>
+            <div style="border:1.5px solid #eee;border-radius:12px;padding:14px;opacity:.35">
+              <div style="font-size:12px;font-weight:700;margin-bottom:3px">Standart</div>
+              <div style="font-size:11px;color:#888">2 içerik</div>
+            </div>
+            <div style="border:1.5px solid #eee;border-radius:12px;padding:14px;opacity:.35">
+              <div style="font-size:12px;font-weight:700;margin-bottom:3px">Kurumsal</div>
+              <div style="font-size:11px;color:#888">10 içerik</div>
+            </div>
+          </div>
+          <div style="background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.18);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--primary2);font-weight:600">✓ Profesyonel paket seçildi — Ödeme tamamlandı</div>
+        </div>
+
+        <!-- STEP 1: Brief -->
+        <div id="step-1" class="demo-step" style="display:none">
+          <div style="font-size:12px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:18px">Brief dolduruluyor</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;gap:10px">
+              <div style="flex:1">
+                <div style="font-size:10px;font-weight:700;color:#aaa;margin-bottom:5px">KAMPANYA</div>
+                <div style="background:#f5f3ee;border:1px solid #e8e3d8;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600">Yaz Koleksiyonu 2026 ☀️</div>
+              </div>
+              <div style="flex:1">
+                <div style="font-size:10px;font-weight:700;color:#aaa;margin-bottom:5px">PLATFORM</div>
+                <div style="background:#f5f3ee;border:1px solid #e8e3d8;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600">TikTok + Reels</div>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:#aaa;margin-bottom:5px">HEDEF KİTLE</div>
+              <div style="background:#f5f3ee;border:1px solid #e8e3d8;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600">18-28 yaş, moda & lifestyle ilgisi</div>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:#aaa;margin-bottom:5px">BRIEF</div>
+              <div style="background:#f5f3ee;border:1px solid #e8e3d8;border-radius:8px;padding:10px 12px;font-size:12px;color:#555;line-height:1.6">Yaz ürünlerimizi günlük hayatta kullanan, samimi ve enerjik içerikler. Marka baskısı hissettirmemeli...</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <span style="background:#fff0e6;border:1px solid #fcd9b6;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;color:var(--primary2)">Lifestyle</span>
+              <span style="background:#fff0e6;border:1px solid #fcd9b6;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;color:var(--primary2)">Açık Hava</span>
+              <span style="background:#fff0e6;border:1px solid #fcd9b6;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;color:var(--primary2)">Gen Z</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2: Creator Eşleşme -->
+        <div id="step-2" class="demo-step" style="display:none">
+          <div style="font-size:12px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:18px">Algoritma creator eşleştiriyor</div>
+          <div style="background:#f5f3ee;border-radius:10px;padding:12px 14px;font-size:12px;color:#666;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--primary);animation:pulse 1s infinite"></div>
+            Brief analiz ediliyor... Niş: Lifestyle · Hedef: Gen Z · Platform: TikTok
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:12px;background:#fff;border:2px solid var(--primary);border-radius:12px;padding:12px 14px">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#f97316,#ea580c);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:13px;flex-shrink:0">ZA</div>
+              <div style="flex:1">
+                <div style="font-weight:700;font-size:13px">Zeynep Arslan</div>
+                <div style="font-size:11px;color:#888">Lifestyle · ⭐ 4.9 · 47 proje · %94 onay</div>
+              </div>
+              <div style="background:var(--primary);color:#fff;font-size:10px;font-weight:800;padding:4px 10px;border-radius:7px;flex-shrink:0">Eşleşti ✓</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;background:#f5f3ee;border:1px solid #e8e3d8;border-radius:12px;padding:12px 14px;opacity:.5">
+              <div style="width:40px;height:40px;border-radius:50%;background:#ddd;display:flex;align-items:center;justify-content:center;font-weight:800;color:#999;font-size:13px;flex-shrink:0">FA</div>
+              <div style="flex:1"><div style="font-weight:700;font-size:13px;color:#aaa">Fatma Aydın</div><div style="font-size:11px;color:#ccc">Fashion · ⭐ 5.0</div></div>
+            </div>
+          </div>
+          <div style="text-align:center;margin-top:12px;font-size:11px;color:#aaa">⚡ Eşleşme 0.4 saniyede tamamlandı · Zeynep brief'i kabul etti</div>
+        </div>
+
+        <!-- STEP 3: Üretim -->
+        <div id="step-3" class="demo-step" style="display:none">
+          <div style="font-size:12px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:18px">Creator üretiyor — Gün 3</div>
+          <div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="font-weight:600">Genel İlerleme</span><span style="color:var(--primary);font-weight:700">%60</span></div>
+            <div style="height:8px;background:#f0ede8;border-radius:4px;overflow:hidden"><div style="width:60%;height:100%;background:linear-gradient(90deg,var(--primary),var(--primary3));border-radius:4px;transition:width 1s"></div></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:10px;background:#f5f3ee;border-radius:9px;padding:10px 12px">
+              <div style="width:28px;height:28px;border-radius:50%;background:rgba(5,150,105,.12);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">✅</div>
+              <div style="flex:1;font-size:12px;font-weight:600">Video 1 — Sabah rutini çekimi</div>
+              <div style="font-size:10px;color:var(--green);font-weight:700">Tamam</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;background:#f5f3ee;border-radius:9px;padding:10px 12px">
+              <div style="width:28px;height:28px;border-radius:50%;background:rgba(5,150,105,.12);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">✅</div>
+              <div style="flex:1;font-size:12px;font-weight:600">Video 2 — Outdoor lifestyle</div>
+              <div style="font-size:10px;color:var(--green);font-weight:700">Tamam</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;background:#fff0e6;border:1px solid #fcd9b6;border-radius:9px;padding:10px 12px">
+              <div style="width:28px;height:28px;border-radius:50%;background:rgba(249,115,22,.12);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🎬</div>
+              <div style="flex:1;font-size:12px;font-weight:600">Video 3 — Arkadaş grubu sahnesi</div>
+              <div style="font-size:10px;color:var(--primary);font-weight:700">Çekimde</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;background:#f5f3ee;border-radius:9px;padding:10px 12px;opacity:.5">
+              <div style="width:28px;height:28px;border-radius:50%;background:#e8e3d8;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">⏳</div>
+              <div style="flex:1;font-size:12px;font-weight:600;color:#aaa">Video 4-5 — Planlama aşamasında</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4: Teslim -->
+        <div id="step-4" class="demo-step" style="display:none">
+          <div style="text-align:center;padding:8px 0 16px">
+            <div style="font-size:48px;margin-bottom:10px">🎉</div>
+            <div style="font-size:18px;font-weight:800;color:#1a1612;margin-bottom:4px">5 Video Teslim Alındı!</div>
+            <div style="font-size:13px;color:#888;margin-bottom:20px">5 günde teslim · HD kalite · Sınırsız kullanım hakkı</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px">
+            <div style="background:linear-gradient(160deg,#fff0e6,#ffe4cc);border-radius:10px;aspect-ratio:9/16;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid #fcd9b6"><div style="font-size:20px">🌅</div><div style="font-size:9px;color:#888;font-weight:600">V1</div></div>
+            <div style="background:linear-gradient(160deg,#fff0e6,#ffe4cc);border-radius:10px;aspect-ratio:9/16;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid #fcd9b6"><div style="font-size:20px">🌿</div><div style="font-size:9px;color:#888;font-weight:600">V2</div></div>
+            <div style="background:linear-gradient(160deg,#fff0e6,#ffe4cc);border-radius:10px;aspect-ratio:9/16;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid #fcd9b6"><div style="font-size:20px">👫</div><div style="font-size:9px;color:#888;font-weight:600">V3</div></div>
+            <div style="background:linear-gradient(160deg,#fff0e6,#ffe4cc);border-radius:10px;aspect-ratio:9/16;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid #fcd9b6"><div style="font-size:20px">☀️</div><div style="font-size:9px;color:#888;font-weight:600">V4</div></div>
+            <div style="background:linear-gradient(160deg,#fff0e6,#ffe4cc);border-radius:10px;aspect-ratio:9/16;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid #fcd9b6"><div style="font-size:20px">🎵</div><div style="font-size:9px;color:#888;font-weight:600">V5</div></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <div style="flex:1;background:rgba(5,150,105,.07);border:1px solid rgba(5,150,105,.2);border-radius:9px;padding:10px;text-align:center;font-size:12px;color:var(--green);font-weight:700">✓ Onaylandı</div>
+            <div style="flex:1;background:rgba(5,150,105,.07);border:1px solid rgba(5,150,105,.2);border-radius:9px;padding:10px;text-align:center;font-size:12px;color:var(--green);font-weight:700">⬇ HD İndir</div>
+            <div style="flex:1;background:rgba(249,115,22,.07);border:1px solid rgba(249,115,22,.2);border-radius:9px;padding:10px;text-align:center;font-size:12px;color:var(--primary);font-weight:700">+ Yeni Sipariş</div>
+          </div>
+        </div>
+
+        <!-- Dots -->
+        <div style="display:flex;justify-content:center;gap:8px;margin-top:24px" id="stepDots">
+          <div class="sdot" style="width:24px;height:6px;border-radius:3px;background:var(--primary);transition:all .35s"></div>
+          <div class="sdot" style="width:6px;height:6px;border-radius:3px;background:#e0dbd0;transition:all .35s"></div>
+          <div class="sdot" style="width:6px;height:6px;border-radius:3px;background:#e0dbd0;transition:all .35s"></div>
+          <div class="sdot" style="width:6px;height:6px;border-radius:3px;background:#e0dbd0;transition:all .35s"></div>
+          <div class="sdot" style="width:6px;height:6px;border-radius:3px;background:#e0dbd0;transition:all .35s"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Caption -->
+    <div style="text-align:center;margin-top:18px;font-size:13px;color:#888">
+      Demo'yu izlemek için <strong style="color:var(--primary)">▶ oynat</strong>'a tıklayın
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ FEATURE 1 ══════════ -->
+<section class="section-pad" id="features" style="padding-top:0">
+  <div class="feature-split reveal">
+    <div class="feature-visual floating">
+      <div class="feature-mockup">
+        <div class="mock-topbar">
+          <div class="mock-title">Marka Paneli</div>
+          <div class="mock-btn">+ Yeni Sipariş</div>
+        </div>
+        <div class="mock-stats">
+          <div class="mock-stat">
+            <div class="mock-stat-val" style="color:var(--primary)">12</div>
+            <div class="mock-stat-lbl">Sipariş</div>
+          </div>
+          <div class="mock-stat">
+            <div class="mock-stat-val" style="color:var(--green)">4</div>
+            <div class="mock-stat-lbl">Üretimde</div>
+          </div>
+          <div class="mock-stat">
+            <div class="mock-stat-val">₺48K</div>
+            <div class="mock-stat-lbl">Harcama</div>
+          </div>
+        </div>
+        <div class="mock-card">
+          <div class="mock-card-top">
+            <div class="mock-card-title">Yaz Koleksiyonu — 5x Video</div>
+            <span class="mpill mp-green">Üretimde</span>
+          </div>
+          <div class="mock-bar"><div class="mock-bar-fill" style="width:70%;background:var(--green)"></div></div>
+        </div>
+        <div class="mock-card">
+          <div class="mock-card-top">
+            <div class="mock-card-title">Unboxing Reels — 2x</div>
+            <span class="mpill mp-amber">Onay Bekliyor</span>
+          </div>
+          <div class="mock-bar"><div class="mock-bar-fill" style="width:92%;background:var(--primary)"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-content">
+      <div class="section-tag">Marka Paneli</div>
+      <h2 class="section-title">Tüm süreç tek ekranda.</h2>
+      <p class="section-sub">Sipariş yönetiminden brief takibine, içerik onayından fatura indirmeye kadar her şey parmak ucunuzda.</p>
+      <div class="feature-list">
+        <div class="feature-item">
+          <div class="feature-item-ico">📊</div>
+          <div>
+            <div class="feature-item-title">Gerçek Zamanlı Takip</div>
+            <div class="feature-item-desc">Creator'ın üretim sürecini adım adım takip edin. Gecikme olmaz, sürpriz olmaz.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-item-ico">💬</div>
+          <div>
+            <div class="feature-item-title">Doğrudan İletişim</div>
+            <div class="feature-item-desc">Creator ile platform içinde mesajlaşın, anında geri bildirim verin.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-item-ico">🔒</div>
+          <div>
+            <div class="feature-item-title">Güvenli Ödeme</div>
+            <div class="feature-item-desc">Ödemeniz içerik onaylanana kadar beklemede tutulur. Hiçbir risk almıyorsunuz.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ FEATURE 2 ══════════ -->
+<section class="section-pad" style="padding-top:0">
+  <div class="feature-split rev reveal">
+    <div class="feature-content">
+      <div class="section-tag">Creator Ağı</div>
+      <h2 class="section-title">Niş uzmanlarla eşleşin.</h2>
+      <p class="section-sub">Algoritmamız briefinizi analiz ederek en uygun creator'ı saniyeler içinde atar. Manuel arama yok.</p>
+      <div class="feature-list">
+        <div class="feature-item">
+          <div class="feature-item-ico">🎯</div>
+          <div>
+            <div class="feature-item-title">Akıllı Eşleşme</div>
+            <div class="feature-item-desc">Lifestyle'dan Tech'e, Beauty'den Gıda'ya — her niş için uzman creator.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-item-ico">⭐</div>
+          <div>
+            <div class="feature-item-title">Puanlanmış Creator'lar</div>
+            <div class="feature-item-desc">Her creator onay oranı, teslimat hızı ve marka puanına göre sıralanır.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-item-ico">🛡️</div>
+          <div>
+            <div class="feature-item-title">Marka Güvenliği</div>
+            <div class="feature-item-desc">Tüm creator'lar NDA ile çalışır. İçerikleriniz tamamen gizli kalır.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-visual floating-2">
+      <div class="creator-cards">
+        <div class="creator-mini">
+          <div class="creator-mini-av" style="background:linear-gradient(135deg,#ffb347,#ff8c42)">ZA</div>
+          <div class="creator-mini-name">Zeynep A.</div>
+          <div class="creator-mini-niche">Lifestyle</div>
+          <div class="creator-mini-rate">₺3.500</div>
+          <div class="creator-mini-stars">⭐ 4.9</div>
+        </div>
+        <div class="creator-mini">
+          <div class="creator-mini-av" style="background:linear-gradient(135deg,#5b8ff9,#2dd4a0)">ED</div>
+          <div class="creator-mini-name">Emre D.</div>
+          <div class="creator-mini-niche">Tech</div>
+          <div class="creator-mini-rate">₺2.900</div>
+          <div class="creator-mini-stars">⭐ 4.7</div>
+        </div>
+        <div class="creator-mini">
+          <div class="creator-mini-av" style="background:linear-gradient(135deg,#ffd580,#ff8c42)">FA</div>
+          <div class="creator-mini-name">Fatma A.</div>
+          <div class="creator-mini-niche">Fashion</div>
+          <div class="creator-mini-rate">₺4.200</div>
+          <div class="creator-mini-stars">⭐ 5.0</div>
+        </div>
+        <div class="creator-mini">
+          <div class="creator-mini-av" style="background:linear-gradient(135deg,#2dd4a0,#5b8ff9)">AK</div>
+          <div class="creator-mini-name">Ali K.</div>
+          <div class="creator-mini-niche">Gaming</div>
+          <div class="creator-mini-rate">₺3.800</div>
+          <div class="creator-mini-stars">⭐ 4.8</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ COMPARISON ══════════ -->
+<section class="section-pad" style="background:#fff" id="comparison">
+  <div class="reveal" style="text-align:center">
+    <div class="section-tag" style="justify-content:center">Briefio vs Geleneksel</div>
+    <h2 class="section-title">Neden UGC içerik<br><em style="font-style:italic;color:var(--primary)">bu kadar etkili?</em></h2>
+    <p class="section-sub" style="margin:0 auto;color:#555">Briefio ile üretilen UGC içerikler geleneksel pazarlama yöntemlerine kıyasla ölçülebilir farklılık yaratır.</p>
+  </div>
+
+  <!-- METRIC BARS -->
+  <div class="reveal" style="margin-top:64px;display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start">
+    <div>
+      <div style="font-size:13px;font-weight:700;color:#888;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:28px">Geleneksel Pazarlama</div>
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#555">Tıklama Oranı (CTR)</span><span style="color:#aaa">%0.9</span></div>
+          <div style="height:10px;background:#eee;border-radius:6px;overflow:hidden"><div style="width:9%;height:100%;background:#ccc;border-radius:6px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#555">Dönüşüm Oranı</span><span style="color:#aaa">%1.2</span></div>
+          <div style="height:10px;background:#eee;border-radius:6px;overflow:hidden"><div style="width:12%;height:100%;background:#ccc;border-radius:6px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#555">Marka Güveni Algısı</span><span style="color:#aaa">%34</span></div>
+          <div style="height:10px;background:#eee;border-radius:6px;overflow:hidden"><div style="width:34%;height:100%;background:#ccc;border-radius:6px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#555">Sosyal Medya Etkileşimi</span><span style="color:#aaa">%2.1</span></div>
+          <div style="height:10px;background:#eee;border-radius:6px;overflow:hidden"><div style="width:21%;height:100%;background:#ccc;border-radius:6px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#555">Müşteri Edinme Maliyeti</span><span style="color:#aaa">Yüksek</span></div>
+          <div style="height:10px;background:#eee;border-radius:6px;overflow:hidden"><div style="width:78%;height:100%;background:#e8b4b4;border-radius:6px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#555">İçerik Üretim Süresi</span><span style="color:#aaa">4–8 Hafta</span></div>
+          <div style="height:10px;background:#eee;border-radius:6px;overflow:hidden"><div style="width:90%;height:100%;background:#e8b4b4;border-radius:6px"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size:13px;font-weight:700;color:var(--primary);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:28px">✦ Briefio UGC</div>
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#333">Tıklama Oranı (CTR)</span><span style="color:var(--primary);font-weight:800">%4.1 <span style="font-size:11px;color:var(--green)">↑ 4.5x</span></span></div>
+          <div style="height:10px;background:#fee8d5;border-radius:6px;overflow:hidden"><div style="width:41%;height:100%;background:linear-gradient(90deg,var(--primary),var(--primary3));border-radius:6px;transition:width 1.2s ease" class="bar-anim"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#333">Dönüşüm Oranı</span><span style="color:var(--primary);font-weight:800">%4.8 <span style="font-size:11px;color:var(--green)">↑ 4x</span></span></div>
+          <div style="height:10px;background:#fee8d5;border-radius:6px;overflow:hidden"><div style="width:48%;height:100%;background:linear-gradient(90deg,var(--primary),var(--primary3));border-radius:6px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#333">Marka Güveni Algısı</span><span style="color:var(--primary);font-weight:800">%79 <span style="font-size:11px;color:var(--green)">↑ 2.3x</span></span></div>
+          <div style="height:10px;background:#fee8d5;border-radius:6px;overflow:hidden"><div style="width:79%;height:100%;background:linear-gradient(90deg,var(--primary),var(--primary3));border-radius:6px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#333">Sosyal Medya Etkileşimi</span><span style="color:var(--primary);font-weight:800">%8.6 <span style="font-size:11px;color:var(--green)">↑ 4.1x</span></span></div>
+          <div style="height:10px;background:#fee8d5;border-radius:6px;overflow:hidden"><div style="width:86%;height:100%;background:linear-gradient(90deg,var(--primary),var(--primary3));border-radius:6px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#333">Müşteri Edinme Maliyeti</span><span style="color:var(--green);font-weight:800">%60 Daha Az</span></div>
+          <div style="height:10px;background:#fee8d5;border-radius:6px;overflow:hidden"><div style="width:28%;height:100%;background:linear-gradient(90deg,var(--green),#34d399);border-radius:6px"></div></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:8px"><span style="color:#333">İçerik Üretim Süresi</span><span style="color:var(--green);font-weight:800">7 Gün</span></div>
+          <div style="height:10px;background:#fee8d5;border-radius:6px;overflow:hidden"><div style="width:14%;height:100%;background:linear-gradient(90deg,var(--green),#34d399);border-radius:6px"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM STAT CARDS -->
+  <div class="reveal" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:56px">
+    <div style="background:linear-gradient(135deg,rgba(249,115,22,.07),rgba(251,191,36,.05));border:1px solid rgba(249,115,22,.18);border-radius:16px;padding:28px 22px;text-align:center">
+      <div style="font-size:40px;font-weight:900;color:var(--primary);font-family:'Montserrat',sans-serif;letter-spacing:-1px">4.5x</div>
+      <div style="font-size:13px;font-weight:700;color:#333;margin-top:6px">Daha Yüksek CTR</div>
+      <div style="font-size:12px;color:#888;margin-top:4px">Geleneksel reklamlara kıyasla</div>
+    </div>
+    <div style="background:linear-gradient(135deg,rgba(249,115,22,.07),rgba(251,191,36,.05));border:1px solid rgba(249,115,22,.18);border-radius:16px;padding:28px 22px;text-align:center">
+      <div style="font-size:40px;font-weight:900;color:var(--primary);font-family:'Montserrat',sans-serif;letter-spacing:-1px">%60</div>
+      <div style="font-size:13px;font-weight:700;color:#333;margin-top:6px">Düşük Edinme Maliyeti</div>
+      <div style="font-size:12px;color:#888;margin-top:4px">Daha az bütçe, daha fazla müşteri</div>
+    </div>
+    <div style="background:linear-gradient(135deg,rgba(249,115,22,.07),rgba(251,191,36,.05));border:1px solid rgba(249,115,22,.18);border-radius:16px;padding:28px 22px;text-align:center">
+      <div style="font-size:40px;font-weight:900;color:var(--primary);font-family:'Montserrat',sans-serif;letter-spacing:-1px">%79</div>
+      <div style="font-size:13px;font-weight:700;color:#333;margin-top:6px">Marka Güveni</div>
+      <div style="font-size:12px;color:#888;margin-top:4px">Tüketiciler UGC'ye daha çok güvenir</div>
+    </div>
+    <div style="background:linear-gradient(135deg,rgba(249,115,22,.07),rgba(251,191,36,.05));border:1px solid rgba(249,115,22,.18);border-radius:16px;padding:28px 22px;text-align:center">
+      <div style="font-size:40px;font-weight:900;color:var(--primary);font-family:'Montserrat',sans-serif;letter-spacing:-1px">7x</div>
+      <div style="font-size:13px;font-weight:700;color:#333;margin-top:6px">Daha Hızlı Üretim</div>
+      <div style="font-size:12px;color:#888;margin-top:4px">Ajans yerine 7 günde teslim</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ ROI CALCULATOR ══════════ -->
+<section class="section-pad" style="background:#fff" id="roi">
+  <div class="reveal" style="text-align:center;margin-bottom:56px">
+    <div class="section-tag" style="justify-content:center">ROI Hesaplayıcı</div>
+    <h2 class="section-title">Bütçenizle ne kadar<br><em style="font-style:italic;color:var(--primary)">daha fazla kazanırsınız?</em></h2>
+    <p class="section-sub" style="margin:0 auto;color:#555">Bilgilerinizi girin, Briefio'nun size özel etkisini saniyeler içinde görün.</p>
+  </div>
+
+  <div class="reveal" style="max-width:960px;margin:0 auto">
+    <!-- INPUTS ROW -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:28px">
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#888;letter-spacing:1px;display:block;margin-bottom:8px">AYLIK REKLAM BÜTÇESİ (₺)</label>
+        <div style="position:relative">
+          <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-weight:800;color:#888;font-size:16px">₺</span>
+          <input id="roiBudget" type="number" placeholder="50.000" min="1000"
+            style="width:100%;background:#f5f3ee;border:2px solid #e8e3d8;border-radius:12px;padding:14px 14px 14px 32px;font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;color:#1a1612;outline:none;transition:border-color .2s"
+            oninput="calcROI()" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='#e8e3d8'">
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#888;letter-spacing:1px;display:block;margin-bottom:8px">SEKTÖR</label>
+        <select id="roiSector" onchange="calcROI()"
+          style="width:100%;background:#f5f3ee;border:2px solid #e8e3d8;border-radius:12px;padding:14px 16px;font-size:14px;font-weight:600;font-family:'Montserrat',sans-serif;color:#1a1612;outline:none;appearance:none;cursor:pointer;height:56px">
+          <option value="0.048,8,220">E-ticaret / Moda</option>
+          <option value="0.051,7,180">Güzellik & Kozmetik</option>
+          <option value="0.039,10,340">Teknoloji & Elektronik</option>
+          <option value="0.055,6,120">Yiyecek & İçecek</option>
+          <option value="0.044,9,200">Spor & Fitness</option>
+          <option value="0.038,11,280">Diğer</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#888;letter-spacing:1px;display:block;margin-bottom:8px">ORTALAMA SATIŞ DEĞERİ (₺)</label>
+        <div style="position:relative">
+          <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-weight:800;color:#888;font-size:16px">₺</span>
+          <input id="roiAOV" type="number" placeholder="350" min="10"
+            style="width:100%;background:#f5f3ee;border:2px solid #e8e3d8;border-radius:12px;padding:14px 14px 14px 32px;font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;color:#1a1612;outline:none;transition:border-color .2s"
+            oninput="calcROI()" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='#e8e3d8'">
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN RESULT CARD -->
+    <div id="roiResults" style="display:none">
+
+      <!-- BIG NUMBER -->
+      <div style="background:linear-gradient(135deg,rgba(249,115,22,.08),rgba(251,191,36,.05));border:2px solid rgba(249,115,22,.2);border-radius:20px;padding:36px;text-align:center;margin-bottom:20px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:-40px;right:-40px;width:160px;height:160px;border-radius:50%;background:rgba(249,115,22,.06);pointer-events:none"></div>
+        <div style="font-size:13px;font-weight:700;color:#888;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">Briefio ile Yıllık Ek Geliriniz</div>
+        <div id="roiBigNum" style="font-size:clamp(48px,6vw,80px);font-weight:900;color:var(--primary);letter-spacing:-2px;line-height:1;margin-bottom:12px">₺0</div>
+        <div style="font-size:14px;color:#666">Aynı reklam bütçesiyle, sadece içerik formatını değiştirerek</div>
+      </div>
+
+      <!-- 4 METRICS -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+        <div style="background:#f5f3ee;border:1px solid #e8e3d8;border-radius:14px;padding:20px;text-align:center">
+          <div style="font-size:10px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Geleneksel<br>Müşteri/Ay</div>
+          <div id="roiOldC" style="font-size:28px;font-weight:900;color:#bbb">—</div>
+          <div style="font-size:11px;color:#bbb;margin-top:4px">kişi</div>
+        </div>
+        <div style="background:rgba(249,115,22,.06);border:2px solid rgba(249,115,22,.2);border-radius:14px;padding:20px;text-align:center">
+          <div style="font-size:10px;font-weight:700;color:var(--primary2);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Briefio ile<br>Müşteri/Ay</div>
+          <div id="roiNewC" style="font-size:28px;font-weight:900;color:var(--primary)">—</div>
+          <div style="font-size:11px;color:var(--primary2);margin-top:4px">kişi</div>
+        </div>
+        <div style="background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.2);border-radius:14px;padding:20px;text-align:center">
+          <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Aylık Ek<br>Gelir</div>
+          <div id="roiMonthly" style="font-size:28px;font-weight:900;color:var(--green)">—</div>
+          <div style="font-size:11px;color:var(--green);margin-top:4px">₺</div>
+        </div>
+        <div style="background:#f5f3ee;border:1px solid #e8e3d8;border-radius:14px;padding:20px;text-align:center">
+          <div style="font-size:10px;font-weight:700;color:#999;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Yatırım<br>Geri Dönüşü</div>
+          <div id="roiROI" style="font-size:28px;font-weight:900;color:#333">—</div>
+          <div style="font-size:11px;color:#999;margin-top:4px">ROI</div>
+        </div>
+      </div>
+
+      <!-- VISUAL COMPARISON BAR -->
+      <div style="background:#f5f3ee;border:1px solid #e8e3d8;border-radius:16px;padding:24px;margin-bottom:20px">
+        <div style="font-size:12px;font-weight:700;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px">Aylık Müşteri Edinme Karşılaştırması</div>
+        <div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px">
+            <span style="color:#999;font-weight:600">Geleneksel Reklam</span>
+            <span id="roiBarOldLabel" style="color:#bbb;font-weight:700">—</span>
+          </div>
+          <div style="height:12px;background:#e8e3d8;border-radius:6px;overflow:hidden">
+            <div id="roiBarOld" style="height:100%;background:#ccc;border-radius:6px;width:0%;transition:width 1s ease"></div>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px">
+            <span style="color:var(--primary2);font-weight:600">Briefio UGC</span>
+            <span id="roiBarNewLabel" style="color:var(--primary);font-weight:700">—</span>
+          </div>
+          <div style="height:12px;background:#fee8d5;border-radius:6px;overflow:hidden">
+            <div id="roiBarNew" style="height:100%;background:linear-gradient(90deg,var(--primary),var(--primary3));border-radius:6px;width:0%;transition:width 1s ease"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PACKAGE SUGGESTION + CTA -->
+      <div style="background:#1a1612;border-radius:16px;padding:24px 28px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+          <div>
+            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px">Size Önerilen Paket</div>
+            <div id="roiPkgName" style="font-size:20px;font-weight:800;color:#fff;margin-bottom:4px">—</div>
+            <div id="roiPkgDesc" style="font-size:13px;color:rgba(255,255,255,.5)">—</div>
+          </div>
+          <div id="roiMultBadge" style="background:rgba(249,115,22,.15);border:1px solid rgba(249,115,22,.3);border-radius:10px;padding:10px 18px;text-align:center">
+            <div style="font-size:10px;font-weight:700;color:rgba(255,179,71,.7);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Tahmini ROI</div>
+            <div id="roiROIBadge" style="font-size:28px;font-weight:900;color:var(--primary)">—</div>
+          </div>
+        </div>
+        <a href="ugc-platform.html" class="btn-primary" style="display:block;text-align:center;font-size:15px;font-weight:800;padding:15px;border-radius:10px;width:100%">Hemen Sipariş Ver →</a>
+      </div>
+
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div id="roiEmpty" style="text-align:center;padding:48px;background:#f5f3ee;border-radius:20px;border:2px dashed #e8e3d8">
+      <div style="font-size:40px;margin-bottom:12px">🧮</div>
+      <div style="font-size:16px;font-weight:700;color:#333;margin-bottom:6px">Bütçenizi girin</div>
+      <div style="font-size:13px;color:#888">Aylık reklam bütçenizi ve sektörünüzü seçin,<br>size özel ROI hesabını anında görelim.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ CREATORS ══════════ -->
+<section class="section-pad" id="creators">
+  <div class="reveal">
+    <div class="section-tag">Creator Ağımız</div>
+    <h2 class="section-title">Her niş için<br><em style="font-style:italic">uzman creator.</em></h2>
+    <p class="section-sub">Lifestyle'dan Tech'e, Güzellikten Gaming'e — 156 onaylı creator sizi bekliyor.</p>
+  </div>
+
+  <div class="creators-scroll reveal">
+    <div class="creator-card">
+      <div class="creator-av-lg" style="background:linear-gradient(135deg,#ffb347,#ff8c42)">ZA</div>
+      <div class="creator-cname">Zeynep Arslan</div>
+      <div class="creator-cniche">🌸 Lifestyle & Beauty</div>
+      <div class="creator-stats">
+        <div><div class="cstat-val" style="color:var(--primary)">4.9</div><div class="cstat-lbl">Puan</div></div>
+        <div><div class="cstat-val">47</div><div class="cstat-lbl">Proje</div></div>
+      </div>
+      <div class="creator-tags"><span class="creator-tag">TikTok</span><span class="creator-tag">Reels</span></div>
+    </div>
+    <div class="creator-card">
+      <div class="creator-av-lg" style="background:linear-gradient(135deg,#5b8ff9,#6366f1)">ED</div>
+      <div class="creator-cname">Emre Demir</div>
+      <div class="creator-cniche">💻 Tech & Gaming</div>
+      <div class="creator-stats">
+        <div><div class="cstat-val" style="color:var(--primary)">4.7</div><div class="cstat-lbl">Puan</div></div>
+        <div><div class="cstat-val">31</div><div class="cstat-lbl">Proje</div></div>
+      </div>
+      <div class="creator-tags"><span class="creator-tag">YouTube</span><span class="creator-tag">TikTok</span></div>
+    </div>
+    <div class="creator-card">
+      <div class="creator-av-lg" style="background:linear-gradient(135deg,#ffd580,#ff8c42)">FA</div>
+      <div class="creator-cname">Fatma Aydın</div>
+      <div class="creator-cniche">👗 Fashion & Style</div>
+      <div class="creator-stats">
+        <div><div class="cstat-val" style="color:var(--primary)">5.0</div><div class="cstat-lbl">Puan</div></div>
+        <div><div class="cstat-val">28</div><div class="cstat-lbl">Proje</div></div>
+      </div>
+      <div class="creator-tags"><span class="creator-tag">Reels</span><span class="creator-tag">Story</span></div>
+    </div>
+    <div class="creator-card">
+      <div class="creator-av-lg" style="background:linear-gradient(135deg,#2dd4a0,#5b8ff9)">AK</div>
+      <div class="creator-cname">Ali Kaya</div>
+      <div class="creator-cniche">🎮 Gaming</div>
+      <div class="creator-stats">
+        <div><div class="cstat-val" style="color:var(--primary)">4.8</div><div class="cstat-lbl">Puan</div></div>
+        <div><div class="cstat-val">39</div><div class="cstat-lbl">Proje</div></div>
+      </div>
+      <div class="creator-tags"><span class="creator-tag">TikTok</span><span class="creator-tag">YouTube</span></div>
+    </div>
+    <div class="creator-card">
+      <div class="creator-av-lg" style="background:linear-gradient(135deg,#ff8c42,#ffd580)">DY</div>
+      <div class="creator-cname">Deniz Yılmaz</div>
+      <div class="creator-cniche">🍕 Yemek & Lifestyle</div>
+      <div class="creator-stats">
+        <div><div class="cstat-val" style="color:var(--primary)">4.6</div><div class="cstat-lbl">Puan</div></div>
+        <div><div class="cstat-val">22</div><div class="cstat-lbl">Proje</div></div>
+      </div>
+      <div class="creator-tags"><span class="creator-tag">Reels</span><span class="creator-tag">TikTok</span></div>
+    </div>
+    <div class="creator-card">
+      <div class="creator-av-lg" style="background:linear-gradient(135deg,#ffb347,#2dd4a0)">SK</div>
+      <div class="creator-cname">Seda Kurt</div>
+      <div class="creator-cniche">💪 Fitness & Sağlık</div>
+      <div class="creator-stats">
+        <div><div class="cstat-val" style="color:var(--primary)">4.9</div><div class="cstat-lbl">Puan</div></div>
+        <div><div class="cstat-val">54</div><div class="cstat-lbl">Proje</div></div>
+      </div>
+      <div class="creator-tags"><span class="creator-tag">TikTok</span><span class="creator-tag">Reels</span></div>
+    </div>
+    <div class="creator-card" style="border-color:rgba(255,179,71,.18);background:rgba(255,179,71,.03);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
+      <div style="font-family:'Montserrat',sans-serif;font-size:34px;font-weight:900;color:var(--primary)">+150</div>
+      <div style="font-size:14px;font-weight:600;text-align:center">Daha Fazla Creator</div>
+      <div style="font-size:12px;color:var(--muted);text-align:center">Kayıt ol ve tüm creator ağına eriş</div>
+      <button class="btn-primary" style="font-size:12.5px;padding:9px 20px;" onclick="location='ugc-platform.html'">Keşfet →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ PORTFOLIO GRID ══════════ -->
+<section class="section-pad" style="background:#fff;padding-top:0">
+  <div class="reveal" style="text-align:center;margin-bottom:48px">
+    <div class="section-tag" style="justify-content:center">Örnek İçerikler</div>
+    <h2 class="section-title">Creator'larımızın<br><em style="font-style:italic;color:var(--primary)">gerçek işleri.</em></h2>
+    <p class="section-sub" style="margin:0 auto;color:#555">Platformumuzdan teslim edilen içeriklerden örnekler. Bunların hepsi 7 gün içinde üretildi.</p>
+  </div>
+
+  <!-- FILTER TABS -->
+  <div class="reveal" style="display:flex;justify-content:center;gap:8px;margin-bottom:36px;flex-wrap:wrap">
+    <button class="ptab active" onclick="filterPortfolio('all',this)">Tümü</button>
+    <button class="ptab" onclick="filterPortfolio('lifestyle',this)">Lifestyle</button>
+    <button class="ptab" onclick="filterPortfolio('tech',this)">Tech & Gaming</button>
+    <button class="ptab" onclick="filterPortfolio('fashion',this)">Fashion</button>
+    <button class="ptab" onclick="filterPortfolio('food',this)">Yemek</button>
+  </div>
+
+  <!-- GRID -->
+  <div class="reveal" id="portfolioGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:1100px;margin:0 auto">
+
+    <div class="pcard" data-cat="lifestyle" style="grid-row:span 2;position:relative;border-radius:16px;overflow:hidden;cursor:pointer;background:#f5f3ee;border:1px solid #e8e3d8" onclick="openPreview('🌸','Zeynep A.','Lifestyle Vlog','TikTok · 1.2M görüntülenme')">
+      <div style="width:100%;height:100%;min-height:320px;background:linear-gradient(160deg,#fff3e0,#ffe0b2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+        <div style="font-size:52px">🌸</div>
+        <div style="font-size:13px;font-weight:700;color:#555">Sabah Rutini</div>
+        <div style="font-size:11px;color:#888">Lifestyle · TikTok</div>
+      </div>
+      <div class="pcard-overlay">
+        <div class="pcard-play">▶</div>
+        <div class="pcard-info">
+          <div style="font-weight:700;font-size:13px">Sabah Rutini Vlog</div>
+          <div style="font-size:11px;opacity:.8">Zeynep A. · 1.2M görüntülenme</div>
+        </div>
+      </div>
+      <div style="position:absolute;top:12px;left:12px;background:rgba(249,115,22,.9);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px">TikTok</div>
+    </div>
+
+    <div class="pcard" data-cat="tech" style="position:relative;border-radius:16px;overflow:hidden;cursor:pointer;aspect-ratio:1;background:#f5f3ee;border:1px solid #e8e3d8" onclick="openPreview('💻','Emre D.','Laptop Unboxing','YouTube · 340K görüntülenme')">
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:linear-gradient(160deg,#e8f4fd,#dbeafe)">
+        <div style="font-size:36px">💻</div>
+        <div style="font-size:12px;font-weight:700;color:#555">Laptop Unboxing</div>
+      </div>
+      <div class="pcard-overlay"><div class="pcard-play">▶</div><div class="pcard-info"><div style="font-weight:700;font-size:12px">Laptop Unboxing</div><div style="font-size:10px;opacity:.8">Emre D. · 340K</div></div></div>
+      <div style="position:absolute;top:10px;left:10px;background:rgba(59,130,246,.9);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px">YouTube</div>
+    </div>
+
+    <div class="pcard" data-cat="fashion" style="position:relative;border-radius:16px;overflow:hidden;cursor:pointer;aspect-ratio:1;background:#f5f3ee;border:1px solid #e8e3d8" onclick="openPreview('👗','Fatma A.','OOTD Reels','Reels · 890K görüntülenme')">
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:linear-gradient(160deg,#fce7f3,#fdf2f8)">
+        <div style="font-size:36px">👗</div>
+        <div style="font-size:12px;font-weight:700;color:#555">OOTD Lookbook</div>
+      </div>
+      <div class="pcard-overlay"><div class="pcard-play">▶</div><div class="pcard-info"><div style="font-weight:700;font-size:12px">OOTD Lookbook</div><div style="font-size:10px;opacity:.8">Fatma A. · 890K</div></div></div>
+      <div style="position:absolute;top:10px;left:10px;background:rgba(236,72,153,.9);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px">Reels</div>
+    </div>
+
+    <div class="pcard" data-cat="tech" style="position:relative;border-radius:16px;overflow:hidden;cursor:pointer;aspect-ratio:1;background:#f5f3ee;border:1px solid #e8e3d8" onclick="openPreview('🎮','Ali K.','Gaming Chair Review','TikTok · 2.1M görüntülenme')">
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:linear-gradient(160deg,#f0fdf4,#dcfce7)">
+        <div style="font-size:36px">🎮</div>
+        <div style="font-size:12px;font-weight:700;color:#555">Gaming Chair</div>
+      </div>
+      <div class="pcard-overlay"><div class="pcard-play">▶</div><div class="pcard-info"><div style="font-weight:700;font-size:12px">Gaming Chair Review</div><div style="font-size:10px;opacity:.8">Ali K. · 2.1M</div></div></div>
+      <div style="position:absolute;top:10px;left:10px;background:rgba(249,115,22,.9);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px">TikTok</div>
+    </div>
+
+    <div class="pcard" data-cat="food" style="position:relative;border-radius:16px;overflow:hidden;cursor:pointer;aspect-ratio:1;background:#f5f3ee;border:1px solid #e8e3d8" onclick="openPreview('🍕','Deniz Y.','Pizza Tarifi','Reels · 560K görüntülenme')">
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:linear-gradient(160deg,#fef3c7,#fde68a)">
+        <div style="font-size:36px">🍕</div>
+        <div style="font-size:12px;font-weight:700;color:#555">Pizza Tarifi</div>
+      </div>
+      <div class="pcard-overlay"><div class="pcard-play">▶</div><div class="pcard-info"><div style="font-weight:700;font-size:12px">Pizza Tarifi</div><div style="font-size:10px;opacity:.8">Deniz Y. · 560K</div></div></div>
+      <div style="position:absolute;top:10px;left:10px;background:rgba(236,72,153,.9);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px">Reels</div>
+    </div>
+
+    <div class="pcard" data-cat="lifestyle" style="position:relative;border-radius:16px;overflow:hidden;cursor:pointer;aspect-ratio:1;background:#f5f3ee;border:1px solid #e8e3d8" onclick="openPreview('💪','Seda K.','Sabah Antrenmanı','TikTok · 1.8M görüntülenme')">
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:linear-gradient(160deg,#fff7ed,#ffedd5)">
+        <div style="font-size:36px">💪</div>
+        <div style="font-size:12px;font-weight:700;color:#555">Sabah Antrenmanı</div>
+      </div>
+      <div class="pcard-overlay"><div class="pcard-play">▶</div><div class="pcard-info"><div style="font-weight:700;font-size:12px">Sabah Antrenmanı</div><div style="font-size:10px;opacity:.8">Seda K. · 1.8M</div></div></div>
+      <div style="position:absolute;top:10px;left:10px;background:rgba(249,115,22,.9);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px">TikTok</div>
+    </div>
+
+    <div class="pcard" data-cat="fashion" style="grid-column:span 2;position:relative;border-radius:16px;overflow:hidden;cursor:pointer;background:#f5f3ee;border:1px solid #e8e3d8;aspect-ratio:2/1" onclick="openPreview('👟','Ali K.','Nike Yaz Koleksiyonu','TikTok · 3.4M görüntülenme')">
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:linear-gradient(135deg,#fff3e0,#ffe0b2,#ffcc80)">
+        <div style="font-size:48px">👟</div>
+        <div style="font-size:15px;font-weight:700;color:#555">Nike Yaz Koleksiyonu</div>
+        <div style="font-size:12px;color:#888">Ali K. · 3.4M görüntülenme</div>
+      </div>
+      <div class="pcard-overlay"><div class="pcard-play" style="width:64px;height:64px;font-size:22px">▶</div><div class="pcard-info"><div style="font-weight:700;font-size:14px">Nike Yaz Koleksiyonu</div><div style="font-size:12px;opacity:.8">Ali K. · 3.4M görüntülenme · TikTok</div></div></div>
+      <div style="position:absolute;top:12px;left:12px;background:rgba(249,115,22,.9);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:6px">TikTok · 🔥 Viral</div>
+    </div>
+
+  </div>
+
+  <div class="reveal" style="text-align:center;margin-top:36px">
+    <a href="ugc-platform.html" class="btn-hero" style="display:inline-block">Tüm Portföyü Gör →</a>
+  </div>
+</section>
+
+<!-- İçerik Önizleme Modal -->
+<div id="previewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:5000;align-items:center;justify-content:center;backdrop-filter:blur(8px)" onclick="closePreview()">
+  <div style="background:#fff;border-radius:20px;padding:32px;max-width:420px;width:90%;text-align:center;position:relative" onclick="event.stopPropagation()">
+    <button onclick="closePreview()" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:#888">✕</button>
+    <div id="pvEmoji" style="font-size:64px;margin-bottom:16px"></div>
+    <div id="pvTitle" style="font-family:'Montserrat',sans-serif;font-size:20px;font-weight:800;margin-bottom:6px"></div>
+    <div id="pvCreator" style="font-size:13px;color:#888;margin-bottom:16px"></div>
+    <div id="pvStats" style="font-size:13px;font-weight:600;color:var(--primary);margin-bottom:24px"></div>
+    <div style="background:#f5f3ee;border-radius:12px;padding:16px;font-size:13px;color:#555;line-height:1.6;margin-bottom:20px">
+      Bu içerik <strong>Briefio</strong> üzerinden sipariş edildi ve <strong>5 gün</strong> içinde teslim alındı. Marka bu içerikle reklamlarında %340 daha yüksek etkileşim elde etti.
+    </div>
+    <a href="ugc-platform.html" class="btn-hero" style="display:inline-block;width:100%;text-align:center">Ben de Sipariş Ver →</a>
+  </div>
+</div>
+
+<!-- ══════════ TESTIMONIALS ══════════ -->
+<section class="section-pad" style="background:var(--surface)">
+  <div class="reveal" style="text-align:center">
+    <div class="section-tag" style="justify-content:center">Marka Yorumları</div>
+    <h2 class="section-title">Markalar ne diyor?</h2>
+  </div>
+
+  <div class="testi-grid reveal">
+    <div class="testi">
+      <div class="testi-quote">"</div>
+      <p class="testi-text">Briefio sayesinde reklam maliyetlerimiz %60 düştü. Gerçek kullanıcı videoları dönüşüm oranlarımızı çarpıcı biçimde artırdı. Ajans dönemimiz kapandı.</p>
+      <div class="testi-author">
+        <div class="tav" style="background:linear-gradient(135deg,#ffb347,#ff8c42)">MK</div>
+        <div>
+          <div class="tav-name">Mert Kaya</div>
+          <div class="tav-role">CMO · Kaya Moda</div>
+          <div class="tav-stars">⭐⭐⭐⭐⭐</div>
+        </div>
+      </div>
+    </div>
+    <div class="testi">
+      <div class="testi-quote">"</div>
+      <p class="testi-text">İlk siparişimde 5 gün içinde muhteşem bir içerik paketi teslim aldık. Creator'ın brief'i ne kadar iyi anladığı bizi gerçekten şaşırttı.</p>
+      <div class="testi-author">
+        <div class="tav" style="background:linear-gradient(135deg,#5b8ff9,#2dd4a0)">AD</div>
+        <div>
+          <div class="tav-name">Ayşe Demir</div>
+          <div class="tav-role">E-ticaret Müdürü · ShopTR</div>
+          <div class="tav-stars">⭐⭐⭐⭐⭐</div>
+        </div>
+      </div>
+    </div>
+    <div class="testi">
+      <div class="testi-quote">"</div>
+      <p class="testi-text">TikTok kampanyamız için 10 farklı UGC video aldık. Platform son derece kullanışlı, brief sistemi mükemmel. Artık sürekli müşterileriyiz.</p>
+      <div class="testi-author">
+        <div class="tav" style="background:linear-gradient(135deg,#2dd4a0,#6366f1)">BY</div>
+        <div>
+          <div class="tav-name">Barış Yıldız</div>
+          <div class="tav-role">Founder · TrendShop</div>
+          <div class="tav-stars">⭐⭐⭐⭐⭐</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BRANDS -->
+<section class="section-pad" style="text-align:center;padding-top:80px;padding-bottom:80px">
+  <div class="reveal">
+    <div style="font-size:12px;color:var(--muted);letter-spacing:2.5px;text-transform:uppercase;font-weight:600;margin-bottom:10px">Güvenen Markalar</div>
+    <div class="brands-row">
+      <div class="brand-logo">TRENDYOL</div>
+      <div class="brand-logo">NIKE TR</div>
+      <div class="brand-logo">L'ORÉAL</div>
+      <div class="brand-logo">NESCAFÉ</div>
+      <div class="brand-logo">SECRETLAB</div>
+      <div class="brand-logo">H&amp;M TR</div>
+      <div class="brand-logo">SAMSUNG</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ FAQ ══════════ -->
+<section class="section-pad" style="background:var(--surface)" id="faq">
+  <div style="max-width:720px;margin:0 auto">
+    <div class="reveal" style="text-align:center">
+      <div class="section-tag" style="justify-content:center">Sık Sorulan Sorular</div>
+      <h2 class="section-title">Merak ettikleriniz.</h2>
+    </div>
+
+    <div class="faq-list reveal">
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">UGC içerik nedir ve neden işe yarıyor?<div class="faq-icon">+</div></div>
+        <div class="faq-answer">UGC (User Generated Content), gerçek kişiler tarafından üretilen samimi içeriklerdir. Profesyonel reklam filmlerinin aksine bu içerikler %4 daha yüksek tıklama oranı ve %3 daha düşük müşteri edinme maliyeti sağlar. TikTok ve Reels'de en iyi performansı gösterirler.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">Creator eşleşmesi nasıl çalışıyor?<div class="faq-icon">+</div></div>
+        <div class="faq-answer">Sipariş verdiğinizde algoritmamız brief'inizi analiz eder; ürün kategorisi, hedef kitle, platform ve içerik türüne göre en uygun creator'ı atar. Manuel seçim yapmak zorunda değilsiniz. Kurumsal pakette özel creator seçimi de mevcuttur.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">Memnun kalmazsam ne olur?<div class="faq-icon">+</div></div>
+        <div class="faq-answer">Tüm paketlerde revizyon hakkınız mevcuttur. Profesyonel ve Kurumsal paketlerde sınırsız revizyon sunuyoruz. İçeriği onaylayana kadar ödemeniz tarafımızda bekletilir — bu nedenle hiçbir risk almıyorsunuz.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">Teslimat süresi ne kadar?<div class="faq-icon">+</div></div>
+        <div class="faq-answer">Başlangıç ve Standart paketlerde ortalama 7 iş günü, Profesyonel pakette 5 gün, Kurumsal pakette 3 gün garanti veriyoruz. Creator'larımızın %94'ü zamanında teslim etmektedir.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">İçerik üzerindeki telif hakları kime ait?<div class="faq-icon">+</div></div>
+        <div class="faq-answer">Sipariş tamamlandığında tüm kullanım hakları size aittir. Creator'larımız NDA ile çalışır. Kurumsal pakette münhasır lisans opsiyonu da mevcuttur.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-question" onclick="toggleFaq(this)">Creator olmak için başvurabilir miyim?<div class="faq-icon">+</div></div>
+        <div class="faq-answer">Evet! Creator platformuna sağ panelden kayıt olabilirsiniz. Başvurunuz ekibimiz tarafından incelenir, uygun bulunmanız halinde 2-3 iş günü içinde hesabınız aktif edilir.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ CTA ══════════ -->
+<section class="section-pad">
+  <div class="cta-section reveal">
+    <div class="hero-badge" style="margin:0 auto 22px;width:fit-content">
+      <div class="badge-dot"></div>
+      Hemen Başlayın
+    </div>
+    <h2 class="cta-title">İlk siparişinizde<br><span class="hl">%10 indirim.</span></h2>
+    <p class="cta-sub">Kayıt olun, brief verin. 7 gün içinde içeriğiniz hazır. Memnun kalmazsanız tam iade garantisi.</p>
+    <div class="cta-actions">
+      <a href="ugc-platform.html" class="btn-hero">Ücretsiz Hesap Aç →</a>
+      <a href="#packages" class="btn-hero-ghost">Paketleri İncele</a>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ FOOTER ══════════ -->
+<footer>
+  <div class="footer-top">
+    <div>
+      <a href="#" class="footer-logo">
+        <div class="nav-logo-ic">✦</div>
+        briefio
+      </a>
+      <p class="footer-desc">Türkiye'nin önde gelen UGC içerik platformu. Markalar ve creator'ları buluşturuyoruz.</p>
+      <div class="social-links" style="margin-top:20px">
+        <a class="social-link" href="#" title="Instagram">📸</a>
+        <a class="social-link" href="#" title="TikTok">🎵</a>
+        <a class="social-link" href="#" title="LinkedIn">💼</a>
+        <a class="social-link" href="#" title="Twitter">𝕏</a>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-title">Platform</div>
+      <ul class="footer-links">
+        <li><a href="#how">Nasıl Çalışır</a></li>
+        <li><a href="#packages">Paketler</a></li>
+        <li><a href="#creators">Creator'lar</a></li>
+        <li><a href="ugc-platform.html">Marka Girişi</a></li>
+        <li><a href="ugc-platform.html">Creator Girişi</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-col-title">Şirket</div>
+      <ul class="footer-links">
+        <li><a href="#">Hakkımızda</a></li>
+        <li><a href="#">Blog</a></li>
+        <li><a href="#">Kariyer</a></li>
+        <li><a href="#">İletişim</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="footer-col-title">Destek</div>
+      <ul class="footer-links">
+        <li><a href="#faq">SSS</a></li>
+        <li><a href="#">Gizlilik Politikası</a></li>
+        <li><a href="#">Kullanım Şartları</a></li>
+        <li><a href="#">Canlı Destek</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 Briefio. Tüm hakları saklıdır.</span>
+    <span style="display:flex;align-items:center;gap:6px">
+      <span style="width:7px;height:7px;background:var(--green);border-radius:50%;animation:pulse 2s infinite;display:inline-block"></span>
+      Tüm sistemler çalışıyor
+    </span>
+  </div>
+</footer>
+
+<script>
+// ── CURSOR ──
+const cursor = document.getElementById('cursor');
+const ring   = document.getElementById('cursorRing');
+let mx=0, my=0, rx=0, ry=0;
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  cursor.style.left = mx+'px'; cursor.style.top = my+'px';
+});
+(function animRing() {
+  rx += (mx-rx)*.11; ry += (my-ry)*.11;
+  ring.style.left = rx+'px'; ring.style.top = ry+'px';
+  requestAnimationFrame(animRing);
+})();
+
+document.querySelectorAll('a,button,.pkg,.testi,.faq-question,.creator-card,.creator-mini').forEach(el => {
+  el.addEventListener('mouseenter', () => {
+    cursor.style.transform='translate(-50%,-50%) scale(2.4)';
+    cursor.style.background='rgba(255,179,71,.55)';
+    ring.style.transform='translate(-50%,-50%) scale(1.5)';
+    ring.style.borderColor='rgba(255,179,71,.5)';
+  });
+  el.addEventListener('mouseleave', () => {
+    cursor.style.transform='translate(-50%,-50%) scale(1)';
+    cursor.style.background='var(--primary)';
+    ring.style.transform='translate(-50%,-50%) scale(1)';
+    ring.style.borderColor='rgba(255,179,71,.35)';
+  });
+});
+
+// ── NAVBAR ──
+const navbar = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  navbar.style.background = window.scrollY > 60
+    ? 'rgba(255,253,249,.97)'
+    : 'rgba(255,253,249,.85)';
+});
+
+// ── SCROLL REVEAL ──
+const observer = new IntersectionObserver(entries => {
+  entries.forEach((e,i) => {
+    if(e.isIntersecting) setTimeout(() => e.target.classList.add('visible'), i*70);
+  });
+}, { threshold:.1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── FAQ ──
+function toggleFaq(el) {
+  const item = el.parentElement;
+  const was = item.classList.contains('open');
+  document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+  if(!was) item.classList.add('open');
+}
+
+// ── SMOOTH SCROLL ──
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const t = document.querySelector(a.getAttribute('href'));
+    if(t){ e.preventDefault(); t.scrollIntoView({behavior:'smooth',block:'start'}); }
+  });
+});
+</script>
+</body>
+</html>
+<style>
+/* ── LIGHT THEME READABILITY FIXES ── */
+.marquee-item { color:#555 !important; }
+.hiw-step-desc { color:#555 !important; }
+.testi-text { color:#444 !important; }
+.tav-role { color:#777 !important; }
+.creator-cniche { color:#666 !important; }
+.cstat-lbl { color:#888 !important; }
+.footer-desc { color:#666 !important; }
+.footer-links a { color:#777 !important; }
+.footer-bottom { color:#888 !important; }
+.section-sub { color:#555 !important; }
+.feature-item-desc { color:#666 !important; }
+.hero-stat-lbl { color:#888 !important; }
+.pkg-unit { color:#888 !important; }
+.pkg-count { color:#666 !important; }
+.hero-sub { color:#555 !important; }
+.btn-hero-ghost { color:#333 !important; border-color:#ccc !important; background:#fff !important; }
+.btn-ghost { color:#555 !important; border-color:#ccc !important; }
+.btn-ghost:hover { color:var(--text) !important; }
+.pkg-cta-ghost { color:#444 !important; border-color:#ccc !important; }
+.pkg-cta-ghost:hover { color:var(--text) !important; border-color:#999 !important; }
+.faq-question { color:var(--text) !important; }
+.faq-answer { color:#555 !important; }
+.brand-logo { color:#bbb !important; }
+.brand-logo:hover { color:#888 !important; }
+.pkg-feature .inactive { color:#aaa !important; }
+.pkg .nx { color:#bbb !important; }
+.hiw-step { background:#fff !important; }
+.hiw-step:hover { background:#fafaf8 !important; }
+.testi { background:#fff !important; border-color:#e8e3d8 !important; }
+.creator-card { background:#fff !important; border-color:#e8e3d8 !important; }
+.creator-mini { background:#f5f3ee !important; }
+.mock-stat { background:#fff !important; }
+.mock-card { background:#fff !important; }
+.feature-visual { background:#fff !important; }
+.mock-topbar { border-color:#e8e3d8 !important; }
+.creator-cards { background:#fff; }
+.packages-bg { background:#f5f3ee !important; }
+.cta-section { background:linear-gradient(135deg,rgba(249,115,22,.07) 0%,rgba(251,191,36,.04) 100%) !important; border-color:rgba(249,115,22,.2) !important; }
+nav { border-color:#e8e3d8 !important; }
+footer { background:#f5f3ee !important; border-color:#e8e3d8 !important; }
+.marquee-wrap { background:#f5f3ee !important; border-color:#e8e3d8 !important; }
+</style>
+<style>
+.ptab { padding:8px 20px;border-radius:100px;border:1px solid #e8e3d8;background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:#888;transition:all .2s;font-family:'Montserrat',sans-serif; }
+.ptab:hover { border-color:var(--primary);color:var(--primary); }
+.ptab.active { background:var(--primary);border-color:var(--primary);color:#fff; }
+.pcard { transition:transform .22s,box-shadow .22s; }
+.pcard:hover { transform:translateY(-4px);box-shadow:0 16px 40px rgba(0,0,0,.12); }
+.pcard-overlay { position:absolute;inset:0;background:rgba(0,0,0,.52);display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;transition:opacity .22s;gap:12px; }
+.pcard:hover .pcard-overlay { opacity:1; }
+.pcard-play { width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--primary);font-weight:700; }
+.pcard-info { color:#fff;text-align:center;padding:0 16px; }
+.demo-step { animation:fadeUp .4s ease both; }
+</style>
+<script>
+// ── DEMO PLAYER ──
+let demoStep = 0, demoTimer;
+function playDemo() {
+  document.getElementById('demoBox').style.display = 'none';
+  document.getElementById('demoPlayer').style.display = 'block';
+  document.getElementById('replayBtn').style.display = 'none';
+  demoStep = 0;
+  clearInterval(demoTimer);
+  showDemoStep(0);
+  demoTimer = setInterval(() => {
+    demoStep++;
+    if(demoStep > 4) {
+      clearInterval(demoTimer);
+      document.getElementById('replayBtn').style.display = 'block';
+      return;
+    }
+    showDemoStep(demoStep);
+  }, 2600);
+}
+function replayDemo() {
+  document.getElementById('replayBtn').style.display = 'none';
+  demoStep = 0;
+  clearInterval(demoTimer);
+  showDemoStep(0);
+  demoTimer = setInterval(() => {
+    demoStep++;
+    if(demoStep > 4) {
+      clearInterval(demoTimer);
+      document.getElementById('replayBtn').style.display = 'block';
+      return;
+    }
+    showDemoStep(demoStep);
+  }, 2600);
+}
+function showDemoStep(i) {
+  document.querySelectorAll('.demo-step').forEach((s,idx) => {
+    s.style.display = idx===i ? 'block' : 'none';
+  });
+  document.querySelectorAll('.sdot').forEach((d,idx) => {
+    d.style.width = idx===i ? '24px' : '6px';
+    d.style.background = idx===i ? 'var(--primary)' : '#e0dbd0';
+  });
+  // Update label tabs
+  for(let j=0;j<5;j++) {
+    const dl = document.getElementById('dl'+j);
+    if(!dl) continue;
+    dl.style.color = j===i ? 'var(--primary)' : j<i ? 'var(--green)' : '#ccc';
+    dl.style.borderBottomColor = j===i ? 'var(--primary)' : j<i ? 'var(--green)' : 'transparent';
+  }
+}
+
+// ── PORTFOLIO FILTER ──
+function filterPortfolio(cat, btn) {
+  document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.pcard').forEach(c => {
+    c.style.opacity = '0';
+    c.style.transform = 'scale(.95)';
+    setTimeout(() => {
+      c.style.display = (cat === 'all' || c.dataset.cat === cat) ? '' : 'none';
+      setTimeout(() => { c.style.opacity = '1'; c.style.transform = ''; }, 50);
+    }, 150);
+  });
+}
+
+// ── PREVIEW MODAL ──
+function openPreview(emoji, creator, title, stats) {
+  document.getElementById('pvEmoji').textContent = emoji;
+  document.getElementById('pvTitle').textContent = title;
+  document.getElementById('pvCreator').textContent = creator;
+  document.getElementById('pvStats').textContent = stats;
+  const m = document.getElementById('previewModal');
+  m.style.display = 'flex';
+  setTimeout(() => m.style.opacity = '1', 10);
+}
+function closePreview() {
+  document.getElementById('previewModal').style.display = 'none';
+}
+document.querySelectorAll('.pcard').forEach(c => {
+  c.style.transition = 'opacity .3s, transform .3s';
+});
+</script>
+<style>
+.qopt {
+  width:100%;text-align:left;padding:12px 16px;border-radius:10px;
+  border:1.5px solid #e0dbd0;background:#fff;font-size:13.5px;font-weight:500;
+  cursor:pointer;transition:all .18s;font-family:'Montserrat',sans-serif;color:#444;
+}
+.qopt:hover { border-color:var(--primary);color:var(--primary);background:rgba(249,115,22,.04); }
+.quiz-q { animation:fadeUp .35s ease both; }
+</style>
+<script>
+// ── ROI CALCULATOR ──
+const pkgs = [
+  { name:'Başlangıç Paketi', price:'₺5.000', desc:'1 video · 1 revizyon · 7 gün', min:0 },
+  { name:'Standart Paket',   desc:'2 video · 2 revizyon · 7 gün', min:20000 },
+  { name:'Profesyonel Paket',desc:'5 video · Sınırsız revizyon · 5 gün', min:50000 },
+  { name:'Kurumsal Paket',   desc:'10 içerik · Özel creator · 3 gün', min:100000 }
+];
+
+function fmt(n) { return Math.round(n).toLocaleString('tr-TR'); }
+
+function calcROI() {
+  const budget = parseFloat(document.getElementById('roiBudget').value) || 0;
+  const aov    = parseFloat(document.getElementById('roiAOV').value)    || 0;
+  const sectorVal = document.getElementById('roiSector').value.split(',');
+  const ugcConv  = parseFloat(sectorVal[0]);
+  const cpc      = parseFloat(sectorVal[1]);
+  const tradConv = 0.012;
+
+  if (!budget || !aov) return;
+
+  document.getElementById('roiEmpty').style.display   = 'none';
+  document.getElementById('roiResults').style.display = 'block';
+
+  const clicks  = budget / cpc;
+  const oldC    = Math.max(1, Math.round(clicks * tradConv));
+  const newC    = Math.round(clicks * ugcConv);
+  const extraC  = newC - oldC;
+  // Ek gelir: sadece ek müşterilerden, AOV ile
+  const monthly = Math.round(extraC * aov);
+  const yearly  = monthly * 12;
+  // ROI: yıllık ek gelir / paket maliyeti
+  const pkgCostNum = budget <= 20000 ? 5000 : budget <= 50000 ? 8000 : budget <= 100000 ? 15000 : 25000;
+  const roiX = yearly > 0 ? (Math.round((yearly / pkgCostNum) * 10) / 10) : 0;
+
+  animateNum('roiBigNum', yearly, '₺');
+  animateNum('roiOldC',   oldC,  '');
+  animateNum('roiNewC',   newC,  '');
+  animateNum('roiMonthly',monthly,'');
+  document.getElementById('roiROI').textContent     = roiX + 'x';
+  document.getElementById('roiROIBadge').textContent = roiX + 'x';
+
+  setTimeout(() => {
+    document.getElementById('roiBarOld').style.width = Math.round((oldC/newC)*100) + '%';
+    document.getElementById('roiBarNew').style.width = '100%';
+  }, 120);
+  document.getElementById('roiBarOldLabel').textContent = fmt(oldC) + ' müşteri/ay';
+  document.getElementById('roiBarNewLabel').textContent = fmt(newC) + ' müşteri/ay';
+
+  let pkg = pkgs[0];
+  for(const p of pkgs) { if(budget >= p.min) pkg = p; }
+  document.getElementById('roiPkgName').textContent = pkg.name;
+  document.getElementById('roiPkgDesc').textContent = pkg.desc;
+}
+
+function animateNum(id, target, prefix) {
+  const el = document.getElementById(id);
+  const start = 0, dur = 900;
+  const startTime = performance.now();
+  function step(now) {
+    const p = Math.min((now - startTime) / dur, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    el.textContent = prefix + fmt(Math.round(start + (target - start) * ease));
+    if(p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+</script>
