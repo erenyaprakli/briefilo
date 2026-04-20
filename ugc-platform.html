@@ -1,0 +1,2630 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Briefilo</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const _sb = window.supabase.createClient(
+  'https://ozgtbnuzqhluuqzafjrn.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96Z3RibnV6cWhsdXVxemFmanJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MjgxNjgsImV4cCI6MjA5MjIwNDE2OH0.f0ljJbDho0snATs8nwF6-kHGwEcpvC5u1a65KEOGZQ8'
+);
+
+// ── AUTH FONKSİYONLARI ──
+
+async function registerUser(email, password, role, full_name) {
+  const { data, error } = await _sb.auth.signUp({ email, password });
+  if (error) { showToast(error.message, '❌'); return; }
+  
+  const uid = data.user?.id;
+  if (!uid) { showToast('Kullanıcı oluşturulamadı', '❌'); return; }
+
+  const { error: pErr } = await _sb.from('profiles').upsert({
+    id: uid, email, role, full_name: full_name || ''
+  });
+
+  if (pErr) {
+    showToast('Profil kaydedilemedi: ' + pErr.message, '❌');
+    return;
+  }
+
+  showToast('Kayıt başarılı! Giriş yapabilirsiniz.', '✅');
+}
+
+async function loginUser(email, password) {
+  const { data, error } = await _sb.auth.signInWithPassword({ email, password });
+  if (error) { showToast('E-posta veya şifre hatalı', '❌'); return; }
+  const { data: profile } = await _sb.from('profiles').select('role').eq('id', data.user.id).single();
+  if (!profile) { showToast('Profil bulunamadı', '❌'); return; }
+  showScreen(profile.role);
+  await loadUserData(data.user.id, profile.role);
+}
+
+async function logoutUser() {
+  await _sb.auth.signOut();
+  showScreen('login');
+}
+
+// Sayfa açılınca oturumu kontrol et
+window.addEventListener('load', async () => {
+  // Şifre sıfırlama token kontrolü
+  const hash = window.location.hash;
+  if (hash.includes('type=recovery') || hash.includes('access_token')) {
+    // Token'ı Supabase'e ver
+    const params = new URLSearchParams(hash.replace('#',''));
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token') || '';
+    if (accessToken) {
+      await _sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    }
+    showScreen('login');
+    switchClientTab('reset');
+    document.getElementById('client-reset').innerHTML = `
+      <div style="font-size:14px;font-weight:700;margin-bottom:16px">🔐 Yeni Şifre Belirle</div>
+      <div class="field"><label>YENİ ŞİFRE</label><input type="password" id="new-pass" placeholder="En az 6 karakter"></div>
+      <div class="field"><label>ŞİFRE TEKRAR</label><input type="password" id="new-pass2" placeholder="••••••••"></div>
+      <button class="lbtn lbtn-c" onclick="updatePassword()">Şifreyi Güncelle →</button>
+    `;
+    return;
+  }
+
+  // Normal oturum kontrolü
+  const { data: { session } } = await _sb.auth.getSession();
+  if (session) {
+    const { data: profile } = await _sb.from('profiles').select('role').eq('id', session.user.id).single();
+    if (profile) {
+      showScreen(profile.role);
+      await loadUserData(session.user.id, profile.role);
+    }
+  }
+});
+</script>
+<style>
+:root {
+  --bg:#fffdf9; --surface:#f5f3ee; --surface2:#ede9e1; --border:#e0dbd0;
+  --text:#1a1612; --muted:#8a8070; --client:#f97316; --creator:#059669;
+  --admin:#6366f1; --danger:#ef4444; --success:#059669;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Montserrat',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+/* ── SCREENS ── */
+.screen{display:none;min-height:100vh;}
+.screen.active{display:flex;}
+
+/* ══════════ LOGIN SCREEN ══════════ */
+#screen-login{
+  flex-direction:column;
+  background:radial-gradient(ellipse at 30% 40%,rgba(245,158,11,0.07) 0%,transparent 55%),
+             radial-gradient(ellipse at 75% 60%,rgba(16,185,129,0.07) 0%,transparent 55%),
+             var(--bg);
+}
+
+.login-top{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:32px 0 28px;
+  font-family:'Montserrat',sans-serif;font-size:22px;font-weight:800;
+}
+.login-logo-ic{
+  width:38px;height:38px;border-radius:10px;
+  background:linear-gradient(135deg,#f59e0b,#10b981);
+  display:flex;align-items:center;justify-content:center;font-size:18px;
+}
+
+/* TWO PANE */
+.login-panes{
+  display:grid;grid-template-columns:1fr 1fr;flex:1;
+  max-width:960px;margin:0 auto;width:100%;gap:0;padding:0 24px 40px;
+}
+
+.login-pane{
+  padding:0 20px;
+  animation:fadeUp 0.4s ease both;
+}
+.login-pane:first-child{animation-delay:0.05s;border-right:1px solid var(--border);}
+.login-pane:last-child{animation-delay:0.1s;padding-left:40px;}
+
+.pane-header{margin-bottom:28px;}
+.pane-emoji{font-size:32px;margin-bottom:8px;}
+.pane-title{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:800;margin-bottom:4px;}
+.pane-sub{font-size:13px;color:var(--muted);}
+
+/* TABS */
+.auth-tabs{display:flex;gap:4px;background:var(--surface2);border-radius:9px;padding:4px;margin-bottom:22px;}
+.auth-tab{
+  flex:1;padding:9px;border-radius:7px;border:none;background:transparent;
+  color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.18s;
+  font-family:'Montserrat',sans-serif;
+}
+.auth-tab.active-c{background:var(--surface);color:var(--client);box-shadow:0 1px 4px rgba(0,0,0,0.3);}
+.auth-tab.active-r{background:var(--surface);color:var(--creator);box-shadow:0 1px 4px rgba(0,0,0,0.3);}
+
+.auth-form{display:none;}
+.auth-form.active{display:block;}
+
+.field{margin-bottom:14px;}
+.field label{font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:5px;letter-spacing:0.5px;}
+.field input{
+  width:100%;background:var(--surface2);border:1px solid var(--border);
+  border-radius:9px;padding:11px 14px;color:var(--text);
+  font-size:13.5px;font-family:'Montserrat',sans-serif;outline:none;transition:border-color 0.2s;
+}
+.field input:focus{border-color:rgba(255,255,255,0.2);}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+.lbtn{
+  width:100%;padding:13px;border-radius:9px;border:none;
+  font-size:13.5px;font-weight:700;cursor:pointer;margin-top:6px;
+  font-family:'Montserrat',sans-serif;transition:all 0.2s;letter-spacing:0.3px;
+}
+.lbtn-c{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;box-shadow:0 4px 18px rgba(245,158,11,0.28);}
+.lbtn-r{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 4px 18px rgba(16,185,129,0.28);}
+.lbtn:hover{transform:translateY(-1px);filter:brightness(1.08);}
+.lbtn:active{transform:translateY(0);}
+
+.forgot-link{
+  display:block;text-align:center;margin-top:12px;
+  font-size:12px;color:var(--muted);cursor:pointer;transition:color 0.15s;
+}
+.forgot-link:hover{color:var(--text);}
+
+.divider{display:flex;align-items:center;gap:10px;margin:16px 0;font-size:11px;color:var(--muted);}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border);}
+
+.social-btn{
+  width:100%;padding:11px;border-radius:9px;border:1px solid var(--border);
+  background:var(--surface2);color:var(--muted);font-size:13px;font-weight:500;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+  font-family:'Montserrat',sans-serif;transition:all 0.18s;margin-bottom:8px;
+}
+.social-btn:hover{border-color:rgba(255,255,255,0.15);color:var(--text);}
+
+/* FORGOT / RESET forms */
+.back-link{
+  display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);
+  cursor:pointer;margin-bottom:16px;transition:color 0.15s;width:fit-content;
+}
+.back-link:hover{color:var(--text);}
+
+.info-box{
+  background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.2);
+  border-radius:9px;padding:13px 15px;font-size:13px;color:rgba(238,238,245,0.75);
+  line-height:1.6;margin-bottom:16px;
+}
+
+/* ADMIN HIDDEN TRIGGER */
+.admin-trigger{
+  position:fixed;bottom:0;right:0;width:32px;height:32px;cursor:pointer;z-index:9999;
+  opacity:0;
+}
+
+/* ══════════ APP LAYOUT ══════════ */
+.app-layout{flex-direction:row;width:100%;}
+
+.sidebar{
+  width:252px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:24px 0;
+  position:sticky;top:0;height:100vh;overflow-y:auto;
+}
+.sidebar-logo{
+  padding:0 20px 28px;font-family:'Montserrat',sans-serif;font-size:17px;font-weight:800;
+  display:flex;align-items:center;gap:10px;
+}
+.logo-ic{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;}
+.lc{background:rgba(245,158,11,0.18);}
+.lr{background:rgba(16,185,129,0.18);}
+.la{background:rgba(99,102,241,0.18);}
+
+.nav-section{padding:0 10px;flex:1;}
+.nav-lbl{font-size:9.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:0 12px 8px;margin-top:10px;display:block;}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;
+  font-size:13.5px;font-weight:500;color:var(--muted);cursor:pointer;transition:all 0.15s;
+  margin-bottom:1px;border:none;background:transparent;width:100%;text-align:left;font-family:'Montserrat',sans-serif;
+}
+.nav-item:hover{background:var(--surface2);color:var(--text);}
+.nav-item.ac{background:rgba(245,158,11,0.1);color:var(--client);}
+.nav-item.ar{background:rgba(16,185,129,0.1);color:var(--creator);}
+.nav-item.aa{background:rgba(99,102,241,0.1);color:var(--admin);}
+.nav-ico{width:16px;height:16px;flex-shrink:0;}
+.nbadge{margin-left:auto;font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px;}
+.nb-c{background:rgba(245,158,11,0.18);color:var(--client);}
+.nb-r{background:rgba(16,185,129,0.18);color:var(--creator);}
+.nb-a{background:rgba(99,102,241,0.18);color:var(--admin);}
+.nb-d{background:rgba(239,68,68,0.18);color:var(--danger);}
+
+.sidebar-foot{padding:14px 10px 0;border-top:1px solid var(--border);margin-top:auto;}
+.user-chip{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:var(--surface2);cursor:pointer;transition:background 0.15s;}
+.user-chip:hover{background:var(--border);}
+.ava{width:34px;height:34px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;}
+.avc{background:rgba(245,158,11,0.22);color:var(--client);}
+.avr{background:rgba(16,185,129,0.22);color:var(--creator);}
+.ava-a{background:rgba(99,102,241,0.22);color:var(--admin);}
+.u-name{font-size:13px;font-weight:600;}
+.u-role{font-size:11px;color:var(--muted);}
+.logout-btn{margin-left:auto;width:26px;height:26px;border-radius:6px;background:transparent;border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all 0.15s;}
+.logout-btn:hover{background:rgba(239,68,68,0.1);border-color:var(--danger);color:var(--danger);}
+
+.main-wrap{flex:1;display:flex;flex-direction:column;min-width:0;}
+.topbar{padding:16px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:rgba(8,8,15,0.85);backdrop-filter:blur(20px);position:sticky;top:0;z-index:100;}
+.topbar-left .pg-title{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:700;}
+.topbar-left .pg-sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+
+.btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all 0.2s;font-family:'Montserrat',sans-serif;}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--muted);}
+.btn-ghost:hover{color:var(--text);border-color:rgba(255,255,255,0.18);}
+.btn-c{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;box-shadow:0 4px 16px rgba(245,158,11,0.28);}
+.btn-c:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(245,158,11,0.42);}
+.btn-r{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 4px 16px rgba(16,185,129,0.28);}
+.btn-r:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(16,185,129,0.42);}
+.btn-a{background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;box-shadow:0 4px 16px rgba(99,102,241,0.28);}
+.btn-a:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(99,102,241,0.42);}
+.btn-danger{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.28);color:var(--danger);}
+.btn-danger:hover{background:rgba(239,68,68,0.22);}
+.btn-sm{padding:6px 13px;font-size:12px;}
+
+.notif-btn{width:36px;height:36px;border-radius:8px;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:background 0.15s;}
+.notif-btn:hover{background:var(--surface2);}
+.notif-dot{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;border:2px solid var(--bg);}
+
+.content{padding:28px;flex:1;overflow-y:auto;}
+.page{display:none;}
+.page.active{display:block;animation:fadeUp 0.3s ease both;}
+
+/* STATS */
+.sg{display:grid;gap:14px;margin-bottom:24px;}
+.sg3{grid-template-columns:repeat(3,1fr);}
+.sg4{grid-template-columns:repeat(4,1fr);}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 22px;transition:transform 0.2s;}
+.stat-card:hover{transform:translateY(-2px);}
+.st-ico{font-size:20px;margin-bottom:12px;}
+.st-val{font-family:'Montserrat',sans-serif;font-size:26px;font-weight:800;margin-bottom:4px;}
+.st-lbl{font-size:12px;color:var(--muted);}
+.st-chg{font-size:11px;font-weight:600;margin-top:6px;}
+.chg-up{color:var(--success);}
+.chg-dn{color:var(--danger);}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+.card-head{padding:16px 22px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.card-title{font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;}
+
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:12px 20px;border-bottom:1px solid var(--border);}
+td{padding:12px 20px;font-size:13.5px;border-bottom:1px solid rgba(255,255,255,0.03);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,0.015);}
+
+.pill{display:inline-block;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700;}
+.p-green{background:rgba(16,185,129,0.12);color:var(--creator);}
+.p-yellow{background:rgba(245,158,11,0.12);color:var(--client);}
+.p-blue{background:rgba(99,102,241,0.12);color:var(--admin);}
+.p-red{background:rgba(239,68,68,0.12);color:var(--danger);}
+.p-gray{background:rgba(255,255,255,0.07);color:var(--muted);}
+
+.pbar{height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;}
+.pfill{height:100%;border-radius:3px;}
+
+.g2{display:grid;grid-template-columns:1fr 300px;gap:16px;}
+.g2eq{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+
+.oc{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:12px;transition:all 0.18s;}
+.oc:hover{border-color:rgba(255,255,255,0.1);}
+.oc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;}
+.oc-id{font-size:11px;color:var(--muted);margin-bottom:3px;}
+.oc-title{font-size:14.5px;font-weight:600;}
+.oc-meta{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;}
+.oc-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+
+.sdiv{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.sdiv-t{font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;white-space:nowrap;}
+.sdiv-l{flex:1;height:1px;background:var(--border);}
+
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:22px;}
+.fg1{grid-column:1/-1;}
+.fgroup{display:flex;flex-direction:column;gap:6px;}
+.fgroup label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:0.4px;}
+.fgroup input,.fgroup select,.fgroup textarea{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-size:13.5px;font-family:'Montserrat',sans-serif;outline:none;transition:border-color 0.2s;width:100%;}
+.fgroup input:focus,.fgroup select:focus,.fgroup textarea:focus{border-color:rgba(255,255,255,0.22);}
+.fgroup textarea{resize:vertical;min-height:80px;}
+.fgroup select option{background:var(--surface);}
+.form-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;}
+
+.ibox{background:var(--surface2);border-radius:9px;padding:13px 15px;margin-bottom:8px;display:flex;align-items:center;gap:10px;}
+.ibox-ico{font-size:20px;}
+.ibox-lbl{font-size:11px;color:var(--muted);}
+.ibox-val{font-size:14px;font-weight:600;margin-top:2px;}
+
+.act-item{display:flex;align-items:flex-start;gap:12px;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,0.03);}
+.act-item:last-child{border-bottom:none;}
+.act-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+.act-txt{font-size:13px;line-height:1.5;flex:1;}
+.act-time{font-size:11px;color:var(--muted);margin-top:2px;}
+
+/* ══════════ PACKAGE SELECTION ══════════ */
+.pkg-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;}
+
+.pkg-card{
+  background:var(--surface);border:2px solid var(--border);border-radius:14px;
+  padding:22px 18px;cursor:pointer;transition:all 0.22s;position:relative;
+  text-align:center;
+}
+.pkg-card:hover{border-color:rgba(245,158,11,0.3);transform:translateY(-3px);}
+.pkg-card.selected{border-color:var(--client);background:rgba(245,158,11,0.05);transform:translateY(-3px);}
+.pkg-card.popular{border-color:var(--client);}
+
+.pkg-badge{
+  position:absolute;top:-11px;left:50%;transform:translateX(-50%);
+  background:var(--client);color:#fff;font-size:10px;font-weight:800;
+  padding:3px 10px;border-radius:20px;letter-spacing:0.5px;white-space:nowrap;
+}
+
+.pkg-icon{font-size:28px;margin-bottom:10px;}
+.pkg-name{font-family:'Montserrat',sans-serif;font-size:14px;font-weight:800;margin-bottom:4px;}
+.pkg-count{font-size:11px;color:var(--muted);margin-bottom:14px;}
+.pkg-price{font-family:'Montserrat',sans-serif;font-size:24px;font-weight:800;color:var(--client);margin-bottom:4px;}
+.pkg-unit{font-size:11px;color:var(--muted);margin-bottom:14px;}
+.pkg-features{text-align:left;}
+.pkg-feature{font-size:11.5px;color:rgba(238,238,245,0.7);padding:3px 0;display:flex;align-items:center;gap:6px;}
+.pkg-feature::before{content:'✓';color:var(--creator);font-weight:700;flex-shrink:0;}
+
+.pkg-select-btn{
+  width:100%;margin-top:14px;padding:9px;border-radius:8px;
+  border:1px solid var(--border);background:transparent;
+  color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;
+  transition:all 0.2s;font-family:'Montserrat',sans-serif;
+}
+.pkg-card.selected .pkg-select-btn{background:var(--client);border-color:var(--client);color:#fff;}
+.pkg-card:hover .pkg-select-btn{border-color:var(--client);color:var(--client);}
+.pkg-card.selected:hover .pkg-select-btn{background:var(--client);color:#fff;}
+
+/* ══════════ PAYMENT SCREEN ══════════ */
+#screen-payment{
+  align-items:flex-start;justify-content:center;
+  background:radial-gradient(ellipse at 20% 30%,rgba(245,158,11,0.06) 0%,transparent 55%),var(--bg);
+  padding:0;flex-direction:column;
+}
+
+.pay-layout{
+  display:grid;grid-template-columns:1fr 400px;width:100%;min-height:100vh;
+}
+
+.pay-left{
+  padding:40px;display:flex;flex-direction:column;
+  border-right:1px solid var(--border);
+}
+
+.pay-back{
+  display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);
+  cursor:pointer;margin-bottom:32px;transition:color 0.15s;width:fit-content;
+}
+.pay-back:hover{color:var(--text);}
+
+.pay-logo{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:40px;}
+.pay-logo-ic{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,#f59e0b,#10b981);display:flex;align-items:center;justify-content:center;font-size:14px;}
+
+.pay-title{font-family:'Montserrat',sans-serif;font-size:26px;font-weight:800;margin-bottom:6px;}
+.pay-sub{font-size:13px;color:var(--muted);margin-bottom:32px;}
+
+/* STEPS */
+.pay-steps{display:flex;align-items:center;gap:0;margin-bottom:36px;}
+.pay-step{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;}
+.step-num{
+  width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;border:2px solid var(--border);color:var(--muted);transition:all 0.3s;
+}
+.step-num.done{background:var(--creator);border-color:var(--creator);color:#fff;}
+.step-num.active{background:var(--client);border-color:var(--client);color:#fff;}
+.step-label{color:var(--muted);}
+.step-label.active{color:var(--text);}
+.step-line{flex:1;height:1px;background:var(--border);margin:0 12px;}
+.step-line.done{background:var(--creator);}
+
+/* PAYMENT STEPS CONTENT */
+.pay-step-content{display:none;}
+.pay-step-content.active{display:block;}
+
+/* STEP 1: Paket */
+.selected-pkg-card{
+  background:var(--surface);border:2px solid var(--client);border-radius:12px;
+  padding:18px 20px;display:flex;align-items:center;gap:16px;margin-bottom:24px;
+}
+.spc-icon{font-size:28px;}
+.spc-name{font-family:'Montserrat',sans-serif;font-size:16px;font-weight:700;}
+.spc-details{font-size:12px;color:var(--muted);margin-top:2px;}
+.spc-price{margin-left:auto;font-family:'Montserrat',sans-serif;font-size:22px;font-weight:800;color:var(--client);}
+
+/* STEP 2: Info */
+.pay-fields{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.pay-field{display:flex;flex-direction:column;gap:6px;}
+.pay-field.full{grid-column:1/-1;}
+.pay-field label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:0.4px;}
+.pay-field input,.pay-field select,.pay-field textarea{
+  background:var(--surface2);border:1px solid var(--border);border-radius:9px;
+  padding:12px 14px;color:var(--text);font-size:13.5px;font-family:'Montserrat',sans-serif;
+  outline:none;transition:border-color 0.2s;width:100%;
+}
+.pay-field input:focus,.pay-field select:focus,.pay-field textarea:focus{border-color:rgba(255,255,255,0.2);}
+.pay-field textarea{resize:vertical;min-height:90px;}
+.pay-field select option{background:var(--surface);}
+
+/* STEP 3: Card */
+.card-visual{
+  background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);
+  border-radius:16px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden;
+}
+.card-visual::before{
+  content:'';position:absolute;top:-30px;right:-30px;
+  width:120px;height:120px;border-radius:50%;
+  background:rgba(245,158,11,0.15);
+}
+.card-visual::after{
+  content:'';position:absolute;bottom:-20px;right:40px;
+  width:80px;height:80px;border-radius:50%;
+  background:rgba(16,185,129,0.1);
+}
+.card-chip{font-size:24px;margin-bottom:16px;}
+.card-number-display{
+  font-family:'Montserrat',sans-serif;font-size:20px;font-weight:600;
+  letter-spacing:4px;margin-bottom:20px;color:rgba(255,255,255,0.9);
+  min-height:28px;
+}
+.card-details-row{display:flex;justify-content:space-between;align-items:flex-end;}
+.card-d-label{font-size:9px;color:rgba(255,255,255,0.5);letter-spacing:1px;margin-bottom:3px;}
+.card-d-val{font-size:14px;font-weight:600;color:rgba(255,255,255,0.9);min-height:20px;}
+.card-logo{font-size:28px;}
+
+.card-input-field{
+  background:var(--surface2);border:1px solid var(--border);border-radius:9px;
+  padding:12px 14px;color:var(--text);font-size:13.5px;font-family:'Montserrat',sans-serif;
+  outline:none;transition:border-color 0.2s;width:100%;margin-bottom:12px;
+}
+.card-input-field:focus{border-color:var(--client);}
+.card-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+
+.secure-badge{
+  display:flex;align-items:center;gap:8px;background:rgba(16,185,129,0.07);
+  border:1px solid rgba(16,185,129,0.18);border-radius:8px;
+  padding:10px 14px;font-size:12px;color:var(--creator);margin-bottom:20px;
+}
+
+.pay-btn{
+  width:100%;padding:15px;border-radius:10px;border:none;
+  font-size:15px;font-weight:700;cursor:pointer;
+  font-family:'Montserrat',sans-serif;transition:all 0.2s;
+  background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;
+  box-shadow:0 6px 24px rgba(245,158,11,0.35);letter-spacing:0.3px;
+}
+.pay-btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(245,158,11,0.5);}
+.pay-btn:active{transform:translateY(0);}
+.pay-btn:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
+
+.pay-nav{display:flex;gap:10px;margin-top:20px;}
+.pay-nav .back-pay{
+  padding:13px 20px;border-radius:9px;border:1px solid var(--border);
+  background:transparent;color:var(--muted);font-size:13.5px;font-weight:600;
+  cursor:pointer;font-family:'Montserrat',sans-serif;transition:all 0.2s;
+}
+.pay-nav .back-pay:hover{color:var(--text);border-color:rgba(255,255,255,0.15);}
+.pay-nav .next-pay{
+  flex:1;padding:13px;border-radius:9px;border:none;
+  background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;
+  font-size:13.5px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;
+  transition:all 0.2s;box-shadow:0 4px 16px rgba(245,158,11,0.3);
+}
+.pay-nav .next-pay:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(245,158,11,0.45);}
+
+/* ORDER SUMMARY (right) */
+.pay-right{
+  background:var(--surface);padding:40px 32px;
+  display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;overflow-y:auto;
+}
+
+.pay-right-title{font-family:'Montserrat',sans-serif;font-size:15px;font-weight:700;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border);}
+
+.sum-item{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13.5px;}
+.sum-item:last-child{border-bottom:none;}
+.sum-label{color:var(--muted);}
+.sum-val{font-weight:600;}
+
+.sum-total{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:16px 0 0;margin-top:8px;border-top:1px solid var(--border);
+}
+.sum-total-label{font-family:'Montserrat',sans-serif;font-size:14px;font-weight:700;}
+.sum-total-val{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:800;color:var(--client);}
+
+.trust-badges{margin-top:28px;}
+.trust-badge{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);margin-bottom:10px;}
+.trust-badge-ico{font-size:16px;}
+
+/* SUCCESS */
+.success-screen{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  flex:1;text-align:center;padding:40px;
+}
+.success-ico{
+  width:80px;height:80px;border-radius:50%;
+  background:rgba(16,185,129,0.15);border:2px solid var(--creator);
+  display:flex;align-items:center;justify-content:center;
+  font-size:36px;margin:0 auto 24px;
+}
+.success-title{font-family:'Montserrat',sans-serif;font-size:26px;font-weight:800;margin-bottom:8px;}
+.success-sub{font-size:14px;color:var(--muted);max-width:380px;line-height:1.7;margin-bottom:28px;}
+.success-order{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:18px 24px;margin-bottom:24px;font-size:13px;
+}
+
+/* MODAL */
+.modal-over{position:fixed;inset:0;background:rgba(0,0,0,0.72);backdrop-filter:blur(8px);z-index:3000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.22s;padding:20px;}
+.modal-over.open{opacity:1;pointer-events:all;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:480px;max-width:100%;max-height:88vh;overflow-y:auto;transform:translateY(20px);transition:transform 0.22s;}
+.modal-over.open .modal{transform:translateY(0);}
+.modal-head{padding:18px 22px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.modal-title{font-family:'Montserrat',sans-serif;font-size:16px;font-weight:700;}
+.mclose{width:28px;height:28px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted);transition:all 0.15s;}
+.mclose:hover{background:var(--border);color:var(--text);}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:13px 18px;font-size:13px;font-weight:500;z-index:9999;display:flex;align-items:center;gap:10px;transform:translateY(20px);opacity:0;transition:all 0.3s;box-shadow:0 8px 32px rgba(0,0,0,0.4);}
+.toast.show{transform:translateY(0);opacity:1;}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.detail-body{padding:22px;}
+.detail-title{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:700;margin-bottom:8px;}
+.detail-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:16px;}
+.detail-section{margin-bottom:18px;}
+.detail-section h4{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+.detail-text{font-size:13.5px;line-height:1.7;color:#555;}
+
+/* ── LIGHT THEME OVERRIDES ── */
+.sidebar{background:#fff;border-right:1px solid var(--border);}
+.topbar{background:rgba(255,253,249,.92);border-bottom:1px solid var(--border);}
+.card{background:#fff;border-color:var(--border);}
+.stat-card{background:#fff;border-color:var(--border);}
+.oc{background:#fff;border-color:var(--border);}
+.oc:hover{border-color:#d0cbc0;}
+.modal{background:#fff;border-color:var(--border);}
+.modal-over{background:rgba(0,0,0,.45);}
+.user-chip{background:var(--surface);}
+.user-chip:hover{background:var(--surface2);}
+.nav-item:hover{background:var(--surface);color:var(--text);}
+.fgroup input,.fgroup select,.fgroup textarea,input,select,textarea{background:var(--surface);border-color:var(--border);color:var(--text);}
+.fgroup input:focus,.fgroup select:focus,.fgroup textarea:focus{border-color:var(--client);}
+table th{border-bottom-color:var(--border);}
+table td{border-bottom-color:rgba(0,0,0,.04);}
+tr:hover td{background:rgba(0,0,0,.015);}
+.toast{background:#fff;border-color:var(--border);color:var(--text);}
+.ibox{background:var(--surface);}
+.act-item{border-bottom-color:rgba(0,0,0,.05);}
+.pbar{background:var(--surface2);}
+.sdiv-l{background:var(--border);}
+.notif-btn{background:#fff;border-color:var(--border);}
+.notif-btn:hover{background:var(--surface);}
+.btn-ghost{background:transparent;border-color:var(--border);color:var(--muted);}
+.btn-ghost:hover{color:var(--text);border-color:#999;}
+.card-head{border-bottom-color:var(--border);}
+.modal-head{border-bottom-color:var(--border);}
+.form-foot{border-top-color:var(--border);}
+.mclose{background:var(--surface);border-color:var(--border);color:var(--muted);}
+.sidebar-foot{border-top-color:var(--border);}
+.logout-btn{border-color:var(--border);}
+.nb-c{background:rgba(249,115,22,.12);color:var(--client);}
+.nb-r{background:rgba(5,150,105,.12);color:var(--creator);}
+.nb-a{background:rgba(99,102,241,.12);color:var(--admin);}
+.nb-d{background:rgba(239,68,68,.12);color:var(--danger);}
+.p-green{background:rgba(5,150,105,.1);color:var(--creator);}
+.p-yellow{background:rgba(249,115,22,.1);color:var(--client);}
+.p-blue{background:rgba(99,102,241,.1);color:var(--admin);}
+.p-red{background:rgba(239,68,68,.1);color:var(--danger);}
+.p-gray{background:rgba(0,0,0,.06);color:#888;}
+.nav-item.ac{background:rgba(249,115,22,.08);color:var(--client);}
+.nav-item.ar{background:rgba(5,150,105,.08);color:var(--creator);}
+.nav-item.aa{background:rgba(99,102,241,.08);color:var(--admin);}
+.btn-c{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;}
+.btn-r{background:linear-gradient(135deg,#059669,#047857);color:#fff;}
+.btn-a{background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;}
+.btn-danger{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.25);color:var(--danger);}
+.avc{background:rgba(249,115,22,.15);color:var(--client);}
+.avr{background:rgba(5,150,105,.15);color:var(--creator);}
+.ava-a{background:rgba(99,102,241,.15);color:var(--admin);}
+.lbtn-c{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;}
+.lbtn-r{background:linear-gradient(135deg,#059669,#047857);color:#fff;}
+.role-card{background:#fff;border-color:var(--border);}
+.role-card:hover{border-color:#ccc;}
+.selected-client{border-color:var(--client);background:rgba(249,115,22,.04);}
+.selected-creator{border-color:var(--creator);background:rgba(5,150,105,.04);}
+.selected-admin{border-color:var(--admin);background:rgba(99,102,241,.04);}
+.login-form{background:#fff;border-color:var(--border);}
+.auth-tabs{background:var(--surface);}
+.auth-tab.active-c{background:#fff;color:var(--client);}
+.auth-tab.active-r{background:#fff;color:var(--creator);}
+.pay-left{border-right-color:var(--border);}
+.pay-right{background:var(--surface);}
+.selected-pkg-card{border-color:var(--client);background:rgba(249,115,22,.04);}
+.pkg-card{background:#fff;border-color:var(--border);}
+.pkg-card:hover{border-color:#ccc;transform:translateY(-2px);}
+.pkg-card.selected{border-color:var(--client);background:rgba(249,115,22,.04);}
+.pkg-card.popular{border-color:var(--client);}
+.card-visual{background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);}
+.card-input-field{background:var(--surface);border-color:var(--border);color:var(--text);}
+.step-line{background:var(--border);}
+.step-num{border-color:var(--border);color:var(--muted);}
+.cr-card{background:var(--surface);border-color:var(--border);}
+#screen-login{background:radial-gradient(ellipse at 30% 40%,rgba(249,115,22,.06) 0%,transparent 55%),radial-gradient(ellipse at 75% 60%,rgba(5,150,105,.05) 0%,transparent 55%),var(--bg);}
+.login-pane:first-child{border-right-color:var(--border);}
+.secure-badge{background:rgba(5,150,105,.06);border-color:rgba(5,150,105,.15);color:var(--creator);}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════ LOGIN SCREEN ══════════════════════════ -->
+<div class="screen active" id="screen-login">
+  <div class="login-top">
+    <div class="login-logo-ic">✦</div>
+    Briefilo
+  </div>
+
+  <div class="login-panes">
+    <!-- LEFT: MARKA -->
+    <div class="login-pane">
+      <div class="pane-header">
+        <div class="pane-emoji">🛍️</div>
+        <div class="pane-title">Marka / İşletme</div>
+        <div class="pane-sub">UGC içerik siparişi ver, kampanyalarını yönet</div>
+      </div>
+
+      <div class="auth-tabs" id="client-tabs">
+        <button class="auth-tab active-c" onclick="switchClientTab('login')">Giriş Yap</button>
+        <button class="auth-tab" onclick="switchClientTab('register')">Kayıt Ol</button>
+      </div>
+
+      <!-- CLIENT LOGIN -->
+      <div class="auth-form active" id="client-login">
+        <div class="field">
+          <label>E-POSTA</label>
+          <input type="email" id="cl-email" placeholder="marka@sirket.com" >
+        </div>
+        <div class="field">
+          <label>ŞİFRE</label>
+          <input type="password" id="cl-pass" placeholder="••••••••" >
+        </div>
+        <button class="lbtn lbtn-c" onclick="doLoginClient()">Giriş Yap →</button>
+        <span class="forgot-link" onclick="switchClientTab('forgot')">Şifremi unuttum</span>
+        <div class="divider">veya</div>
+        <button class="social-btn" onclick="doLoginClient()">🔵 Google ile giriş yap</button>
+        <button class="social-btn" onclick="doLoginClient()">⚫ LinkedIn ile giriş yap</button>
+      </div>
+
+      <!-- CLIENT REGISTER -->
+      <div class="auth-form" id="client-register">
+        <div class="field-row">
+          <div class="field"><label>AD</label><input id="reg-firstname" placeholder="Ad"></div>
+          <div class="field"><label>SOYAD</label><input id="reg-lastname" placeholder="Soyad"></div>
+        </div>
+        <div class="field"><label>ŞİRKET ADI</label><input id="reg-company" placeholder="Kaya Moda A.Ş."></div>
+        <div class="field"><label>E-POSTA</label><input id="reg-email" type="email" placeholder="marka@sirket.com"></div>
+        <div class="field"><label>TELEFON</label><input id="reg-phone" placeholder="+90 555 000 0000"></div>
+        <div class="field"><label>ŞİFRE</label><input id="reg-password" type="password" placeholder="En az 8 karakter"></div>
+        <div class="field"><label>ŞİFRE TEKRAR</label><input id="reg-password2" type="password" placeholder="••••••••"></div>
+        <button class="lbtn lbtn-c" onclick="doRegisterClient()">Hesap Oluştur →</button>
+        <div class="divider">veya</div>
+        <button class="social-btn" onclick="doLoginClient()">🔵 Google ile kayıt ol</button>
+      </div>
+
+      <!-- CLIENT FORGOT -->
+      <div class="auth-form" id="client-forgot">
+        <div class="back-link" onclick="switchClientTab('login')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          Geri dön
+        </div>
+        <div class="info-box">📧 E-posta adresinizi girin, şifre sıfırlama bağlantısı gönderelim.</div>
+        <div class="field"><label>E-POSTA</label><input id="forgot-email-client" type="email" placeholder="marka@sirket.com"></div>
+        <button class="lbtn lbtn-c" onclick="sendResetEmail('forgot-email-client','login','c')">Bağlantı Gönder →</button>
+      </div>
+
+      <!-- CLIENT RESET -->
+      <div class="auth-form" id="client-reset">
+        <div class="back-link" onclick="switchClientTab('login')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          Giriş sayfasına dön
+        </div>
+        <div class="info-box">✅ E-posta gönderildi! Gelen kutunuzu kontrol edin.</div>
+        <div class="field"><label>DOĞRULAMA KODU</label><input placeholder="6 haneli kod" maxlength="6"></div>
+        <div class="field"><label>YENİ ŞİFRE</label><input type="password" placeholder="En az 8 karakter"></div>
+        <div class="field"><label>YENİ ŞİFRE TEKRAR</label><input type="password" placeholder="••••••••"></div>
+        <button class="lbtn lbtn-c" onclick="switchClientTab('login');showToast('Şifreniz güncellendi! Giriş yapabilirsiniz ✓','🔐')">Şifreyi Güncelle →</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: CREATOR -->
+    <div class="login-pane">
+      <div class="pane-header">
+        <div class="pane-emoji">🎬</div>
+        <div class="pane-title">İçerik Üretici</div>
+        <div class="pane-sub">Markalara UGC içerik üret, kazan</div>
+      </div>
+
+      <div class="auth-tabs" id="creator-tabs">
+        <button class="auth-tab active-r" onclick="switchCreatorTab('login')">Giriş Yap</button>
+        <button class="auth-tab" onclick="switchCreatorTab('register')">Başvur</button>
+      </div>
+
+      <!-- CREATOR LOGIN -->
+      <div class="auth-form active" id="creator-login">
+        <div class="field">
+          <label>E-POSTA</label>
+          <input type="email" id="cr-email" placeholder="creator@email.com" >
+        </div>
+        <div class="field">
+          <label>ŞİFRE</label>
+          <input type="password" id="cr-pass" placeholder="••••••••" >
+        </div>
+        <button class="lbtn lbtn-r" onclick="doLoginCreator()">Giriş Yap →</button>
+        <span class="forgot-link" onclick="switchCreatorTab('forgot')">Şifremi unuttum</span>
+        <div class="divider">veya</div>
+        <button class="social-btn" onclick="doLoginCreator()">🔵 Google ile giriş yap</button>
+        <button class="social-btn" onclick="doLoginCreator()">📸 Instagram ile giriş yap</button>
+      </div>
+
+      <!-- CREATOR REGISTER -->
+      <div class="auth-form" id="creator-register">
+        <div class="field-row">
+          <div class="field"><label>AD</label><input id="creg-firstname" placeholder="Ad"></div>
+          <div class="field"><label>SOYAD</label><input id="creg-lastname" placeholder="Soyad"></div>
+        </div>
+        <div class="field"><label>E-POSTA</label><input id="creg-email" type="email" id="cr-email" placeholder="creator@email.com"></div>
+        <div class="field"><label>TELEFON</label><input id="creg-phone" placeholder="+90 555 000 0000"></div>
+        <div class="field"><label>İÇERİK NİŞİ</label>
+          <select id="creg-niche" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:11px 14px;color:var(--text);font-size:13.5px;width:100%;outline:none;">
+            <option>Lifestyle</option><option>Beauty & Fashion</option>
+            <option>Tech & Gaming</option><option>Yemek & İçecek</option>
+            <option>Spor & Fitness</option><option>Anne & Bebek</option><option>Diğer</option>
+          </select>
+        </div>
+        <div class="field"><label>INSTAGRAM / TİKTOK HESABI</label><input id="creg-social" placeholder="@kullaniciadi"></div>
+        <div class="field"><label>ŞİFRE</label><input id="creg-password" type="password" placeholder="En az 8 karakter"></div>
+        <button class="lbtn lbtn-r" onclick="doRegisterCreator()">Başvuru Gönder →</button>
+      </div>
+
+      <!-- CREATOR FORGOT -->
+      <div class="auth-form" id="creator-forgot">
+        <div class="back-link" onclick="switchCreatorTab('login')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          Geri dön
+        </div>
+        <div class="info-box">📧 E-posta adresinizi girin, şifre sıfırlama bağlantısı gönderelim.</div>
+        <div class="field"><label>E-POSTA</label><input type="email" id="forgot-email-creator" placeholder="creator@email.com"></div>
+        <button class="lbtn lbtn-r" onclick="sendResetEmail('forgot-email-creator','login','r')">Bağlantı Gönder →</button>
+      </div>
+
+      <!-- CREATOR RESET -->
+      <div class="auth-form" id="creator-reset">
+        <div class="back-link" onclick="switchCreatorTab('login')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          Giriş sayfasına dön
+        </div>
+        <div class="info-box">✅ E-posta gönderildi! Gelen kutunuzu kontrol edin.</div>
+        <div class="field"><label>DOĞRULAMA KODU</label><input placeholder="6 haneli kod" maxlength="6"></div>
+        <div class="field"><label>YENİ ŞİFRE</label><input type="password" placeholder="En az 8 karakter"></div>
+        <div class="field"><label>YENİ ŞİFRE TEKRAR</label><input type="password" placeholder="••••••••"></div>
+        <button class="lbtn lbtn-r" onclick="switchCreatorTab('login');showToast('Şifreniz güncellendi! ✓','🔐')">Şifreyi Güncelle →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HIDDEN ADMIN TRIGGER (bottom-right corner, 5 clicks) -->
+  <div class="admin-trigger" id="adminTrigger" onclick="adminClick()"></div>
+</div>
+
+<!-- ══════════════════════════ PAYMENT SCREEN ══════════════════════════ -->
+<div class="screen" id="screen-payment" style="flex-direction:column;">
+  <div class="pay-layout">
+    <!-- LEFT -->
+    <div class="pay-left">
+      <div class="pay-back" onclick="goBackFromPayment()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        Panele Dön
+      </div>
+      <div class="pay-logo"><div class="pay-logo-ic">✦</div> Briefilo</div>
+
+      <!-- STEPS -->
+      <div class="pay-steps">
+        <div class="pay-step"><div class="step-num active" id="snum1">1</div><span class="step-label active" id="slbl1">Paket</span></div>
+        <div class="step-line" id="sline1"></div>
+        <div class="pay-step"><div class="step-num" id="snum2">2</div><span class="step-label" id="slbl2">Detay</span></div>
+        <div class="step-line" id="sline2"></div>
+        <div class="pay-step"><div class="step-num" id="snum3">3</div><span class="step-label" id="slbl3">Creator</span></div>
+        <div class="step-line" id="sline3"></div>
+        <div class="pay-step"><div class="step-num" id="snum4">4</div><span class="step-label" id="slbl4">Ödeme</span></div>
+      </div>
+
+      <!-- STEP 1: PAKET -->
+      <div class="pay-step-content active" id="pstep1">
+        <div class="pay-title">Paket Seç</div>
+        <div class="pay-sub">Size uygun paketi seçin</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+          <div class="pkg-card" id="pkg1" onclick="selectPkg(1,'Başlangıç','1 Adet İçerik','₺4.000 + KDV',4000,'🎬')">
+            <div class="pkg-icon">🎬</div>
+            <div class="pkg-name">Başlangıç</div>
+            <div class="pkg-count">1 Adet İçerik</div>
+            <div class="pkg-price">₺4.000</div>
+            <div class="pkg-unit">+ KDV (%20) = ₺4.800</div>
+            <div class="pkg-features">
+              <div class="pkg-feature">1 UGC Video</div>
+              <div class="pkg-feature">1 Revizyon Hakkı</div>
+              <div class="pkg-feature">7 Gün Teslimat</div>
+              <div class="pkg-feature">HD Kalite</div>
+            </div>
+            <button class="pkg-select-btn">Seç</button>
+          </div>
+          <div class="pkg-card popular" id="pkg2" onclick="selectPkg(2,'Standart','3 Adet İçerik','₺10.000 + KDV',10000,'🎯')">
+            <div class="pkg-badge">⚡ POPÜLER</div>
+            <div class="pkg-icon">🎯</div>
+            <div class="pkg-name">Standart</div>
+            <div class="pkg-count">3 Adet İçerik</div>
+            <div class="pkg-price">₺10.000</div>
+            <div class="pkg-unit">+ KDV (%20) = ₺12.000</div>
+            <div class="pkg-features">
+              <div class="pkg-feature">3 UGC Video</div>
+              <div class="pkg-feature">2 Revizyon Hakkı</div>
+              <div class="pkg-feature">7 Gün Teslimat</div>
+              <div class="pkg-feature">HD Kalite</div>
+            </div>
+            <button class="pkg-select-btn">Seç</button>
+          </div>
+          <div class="pkg-card" id="pkg3" onclick="selectPkg(3,'Profesyonel','5 Adet İçerik','₺16.000 + KDV',16000,'🚀')">
+            <div class="pkg-icon">🚀</div>
+            <div class="pkg-name">Profesyonel</div>
+            <div class="pkg-count">5 Adet İçerik</div>
+            <div class="pkg-price">₺16.000</div>
+            <div class="pkg-unit">+ KDV (%20) = ₺19.200</div>
+            <div class="pkg-features">
+              <div class="pkg-feature">5 UGC Video</div>
+              <div class="pkg-feature">Sınırsız Revizyon</div>
+              <div class="pkg-feature">5 Gün Teslimat</div>
+              <div class="pkg-feature">4K Kalite</div>
+            </div>
+            <button class="pkg-select-btn">Seç</button>
+          </div>
+          <div class="pkg-card" id="pkg4" onclick="selectPkg(4,'Kurumsal','10 Adet İçerik','₺30.000 + KDV',30000,'👑')">
+            <div class="pkg-icon">👑</div>
+            <div class="pkg-name">Kurumsal</div>
+            <div class="pkg-count">10 Adet İçerik</div>
+            <div class="pkg-price">₺30.000</div>
+            <div class="pkg-unit">+ KDV (%20) = ₺36.000</div>
+            <div class="pkg-features">
+              <div class="pkg-feature">10 UGC İçerik</div>
+              <div class="pkg-feature">Sınırsız Revizyon</div>
+              <div class="pkg-feature">3 Gün Öncelikli</div>
+              <div class="pkg-feature">Özel Creator Seçimi</div>
+            </div>
+            <button class="pkg-select-btn">Seç</button>
+          </div>
+        </div>
+        <button class="next-pay" style="width:100%;padding:13px;border-radius:9px;border:none;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s;box-shadow:0 4px 16px rgba(249,115,22,.3);" onclick="goPayStep(2)">Devam Et →</button>
+      </div>
+
+      <!-- STEP 2: SİPARİŞ DETAYI -->
+      <div class="pay-step-content" id="pstep2">
+        <div class="pay-title">Sipariş Detayı</div>
+        <div class="pay-sub">Kampanyanız hakkında bilgi verin</div>
+
+        <div style="font-size:12px;font-weight:700;color:var(--client);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;margin-top:4px">Temel Bilgiler</div>
+        <div class="pay-fields" style="margin-bottom:20px">
+          <div class="pay-field full"><label>KAMPANYA ADI *</label><input placeholder="örn. Yaz Koleksiyonu 2026"></div>
+          <div class="pay-field"><label>ÜRÜN ADI *</label><input placeholder="örn. Air Force 1 Sneaker"></div>
+          <div class="pay-field"><label>ÜRÜN LİNKİ (opsiyonel)</label><input placeholder="https://..."></div>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:var(--client);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px">İçerik Bilgileri</div>
+        <div class="pay-fields" style="margin-bottom:20px">
+          <div class="pay-field"><label>PLATFORM *</label>
+            <select>
+              <option>TikTok</option><option>Instagram Reels</option>
+              <option>TikTok + Instagram Reels</option><option>YouTube Shorts</option><option>Hepsi</option>
+            </select>
+          </div>
+          <div class="pay-field"><label>VİDEO YÖNELİMİ *</label>
+            <select>
+              <option>Dikey (9:16) — TikTok / Reels</option>
+              <option>Yatay (16:9) — YouTube</option>
+              <option>Kare (1:1) — Feed</option>
+            </select>
+          </div>
+          <div class="pay-field"><label>VİDEO SÜRESİ *</label>
+            <select>
+              <option>15-30 saniye</option><option>30-60 saniye</option>
+              <option>60-90 saniye</option><option>90+ saniye</option>
+            </select>
+          </div>
+          <div class="pay-field"><label>İÇERİK TÜRÜ</label>
+            <select>
+              <option>Ürün Tanıtımı / Unboxing</option><option>Lifestyle Kullanım</option>
+              <option>Karşılaştırma / Review</option><option>Before & After</option><option>Tutorial</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:var(--client);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px">Hedefleme</div>
+        <div class="pay-fields" style="margin-bottom:20px">
+          <div class="pay-field full">
+            <label>HEDEF KİTLE *</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="audienceChips">
+              <button type="button" class="aud-chip" onclick="toggleAud(this)">Gen Z (18-24)</button>
+              <button type="button" class="aud-chip" onclick="toggleAud(this)">Millennials (25-34)</button>
+              <button type="button" class="aud-chip" onclick="toggleAud(this)">Anne & Bebek</button>
+              <button type="button" class="aud-chip" onclick="toggleAud(this)">Spor & Fitness</button>
+              <button type="button" class="aud-chip" onclick="toggleAud(this)">Teknoloji Meraklıları</button>
+              <button type="button" class="aud-chip" onclick="toggleAud(this)">Moda Severler</button>
+              <button type="button" class="aud-chip aud-other" onclick="toggleOther(this)">+ Diğer</button>
+            </div>
+            <input id="audienceOther" placeholder="Hedef kitlenizi tanımlayın..." style="display:none;margin-top:8px;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 13px;font-size:13.5px;font-family:'Montserrat',sans-serif;color:var(--text);outline:none;">
+          </div>
+          <div class="pay-field"><label>YAŞ ARALIĞI</label>
+            <select>
+              <option>13-17</option><option>18-24</option><option>25-34</option>
+              <option>35-44</option><option>45+</option><option>Tümü</option>
+            </select>
+          </div>
+          <div class="pay-field"><label>CİNSİYET</label>
+            <select><option>Fark Etmez</option><option>Kadın</option><option>Erkek</option></select>
+          </div>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:var(--client);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px">Brief</div>
+        <div class="pay-fields" style="margin-bottom:16px">
+          <div class="pay-field full">
+            <label>BRIEF / AÇIKLAMA *</label>
+            <textarea style="min-height:110px" placeholder="Örn: Ürünümüzü günlük hayatta kullanan samimi bir içerik istiyoruz. Açılış sahnesi mutfakta başlayabilir, ürünün faydalarından bahsedilmeli. Marka adını en az 2 kez geçirilmeli. Müzik enerjik olsun..."></textarea>
+          </div>
+          <div class="pay-field full">
+            <label>ÜRÜN CREATOR'DA KALACAK MI? *</label>
+            <div style="display:flex;gap:10px;margin-top:4px">
+              <button type="button" class="aud-chip" onclick="selectProdKeep(this,'evet')" id="pk-yes">✓ Evet, Creator'da Kalır</button>
+              <button type="button" class="aud-chip" onclick="selectProdKeep(this,'hayir')" id="pk-no">✗ Hayır, Geri Gönderilecek</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pay-nav">
+          <button class="back-pay" onclick="goPayStep(1)">← Geri</button>
+          <button class="next-pay" onclick="goPayStep(3)">Creator Seç →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3: CREATOR SEÇİMİ -->
+      <div class="pay-step-content" id="pstep3">
+        <div class="pay-title">İçerik Üretici</div>
+        <div class="pay-sub">Briefio otomatik eşleştirir veya siz seçin</div>
+
+        <div style="background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.2);border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:13px;color:var(--text)">
+          🤖 <strong>Otomatik Eşleşme:</strong> Brief'inize en uygun creator algoritmamız tarafından atanır. Genellikle 2 saat içinde eşleşir.
+        </div>
+
+        <div style="display:flex;gap:10px;margin-bottom:20px">
+          <button type="button" class="aud-chip active-chip" onclick="selectCreatorMode(this,'auto')" id="cm-auto">🤖 Otomatik Eşleşme</button>
+          <button type="button" class="aud-chip" onclick="selectCreatorMode(this,'manual')" id="cm-manual">🎯 Kendim Seçeceğim</button>
+        </div>
+
+        <div id="creatorList">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px">Önerilen Creator'lar</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="cr-select-card" onclick="selectCreatorCard(this,'Zeynep Arslan')">
+              <div class="cr-select-av" style="background:linear-gradient(135deg,#f97316,#ea580c)">ZA</div>
+              <div style="flex:1">
+                <div style="font-weight:700;font-size:14px">Zeynep Arslan</div>
+                <div style="font-size:12px;color:var(--muted)">Lifestyle & Beauty · ⭐ 4.9 · 47 proje · %94 onay</div>
+                <div style="display:flex;gap:6px;margin-top:6px"><span class="creator-tag">TikTok</span><span class="creator-tag">Reels</span><span class="creator-tag">Lifestyle</span></div>
+              </div>
+              <div style="text-align:right"><div class="cr-sel-check">○</div></div>
+            </div>
+            <div class="cr-select-card" onclick="selectCreatorCard(this,'Emre Demir')">
+              <div class="cr-select-av" style="background:linear-gradient(135deg,#3b82f6,#6366f1)">ED</div>
+              <div style="flex:1">
+                <div style="font-weight:700;font-size:14px">Emre Demir</div>
+                <div style="font-size:12px;color:var(--muted)">Tech & Gaming · ⭐ 4.7 · 31 proje · %88 onay</div>
+                <div style="display:flex;gap:6px;margin-top:6px"><span class="creator-tag">YouTube</span><span class="creator-tag">TikTok</span></div>
+              </div>
+              <div style="text-align:right"><div class="cr-sel-check">○</div></div>
+            </div>
+            <div class="cr-select-card" onclick="selectCreatorCard(this,'Fatma Aydın')">
+              <div class="cr-select-av" style="background:linear-gradient(135deg,#ec4899,#f97316)">FA</div>
+              <div style="flex:1">
+                <div style="font-weight:700;font-size:14px">Fatma Aydın</div>
+                <div style="font-size:12px;color:var(--muted)">Fashion · ⭐ 5.0 · 28 proje · %100 onay</div>
+                <div style="display:flex;gap:6px;margin-top:6px"><span class="creator-tag">Reels</span><span class="creator-tag">Fashion</span></div>
+              </div>
+              <div style="text-align:right"><div class="cr-sel-check">○</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pay-nav" style="margin-top:20px">
+          <button class="back-pay" onclick="goPayStep(2)">← Geri</button>
+          <button class="next-pay" onclick="goPayStep(4)">Sipariş Özeti →</button>
+        </div>
+      </div>
+
+      <!-- STEP 4: ÖZET + ÖDEME -->
+      <div class="pay-step-content" id="pstep4">
+        <div class="pay-title">Sipariş Özeti</div>
+        <div class="pay-sub">Kontrol edin ve ödemeye geçin</div>
+
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:14px">Seçilen Paket</div>
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="font-size:28px" id="sumIcon4">🎬</div>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:15px" id="sumPkgName4">—</div>
+              <div style="font-size:13px;color:var(--muted)" id="sumPkgCount4">—</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-weight:800;font-size:18px;color:var(--client)" id="sumPrice4">—</div>
+              <div style="font-size:11px;color:var(--muted)" id="sumKdv4">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px">
+          <div style="padding:14px 18px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase">Ödeme</div>
+          <div style="padding:18px">
+            <div class="secure-badge" style="margin-bottom:16px">🔒 256-bit SSL şifrelemesi ile korunmaktadır</div>
+            <div class="card-visual" style="margin-bottom:16px">
+              <div class="card-chip">💳</div>
+              <div class="card-number-display" id="cardNumDisplay">•••• •••• •••• ••••</div>
+              <div class="card-details-row">
+                <div><div class="card-d-label">KART SAHİBİ</div><div class="card-d-val" id="cardNameDisplay">AD SOYAD</div></div>
+                <div><div class="card-d-label">SON KULLANMA</div><div class="card-d-val" id="cardExpDisplay">MM/YY</div></div>
+                <div class="card-logo" id="cardTypeDisplay">💳</div>
+              </div>
+            </div>
+            <input class="card-input-field" placeholder="Kart Üzerindeki Ad Soyad" oninput="updateCardName(this.value)" style="text-transform:uppercase;">
+            <input class="card-input-field" placeholder="Kart Numarası" maxlength="19" oninput="formatCardNum(this)" inputmode="numeric">
+            <div class="card-row">
+              <input class="card-input-field" placeholder="AA/YY" maxlength="5" oninput="formatExp(this)" style="margin-bottom:0">
+              <input class="card-input-field" placeholder="CVV" maxlength="3" inputmode="numeric" style="margin-bottom:0">
+              <input class="card-input-field" placeholder="Posta Kodu" maxlength="5" style="margin-bottom:0">
+            </div>
+            <div style="margin:14px 0;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="save3d" checked> <label for="save3d">3D Secure ile öde (önerilir)</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="pay-nav">
+          <button class="back-pay" onclick="goPayStep(3)">← Geri</button>
+          <button class="next-pay" onclick="processPayment()" style="background:linear-gradient(135deg,#f97316,#ea580c)">💳 ₺<span id="payBtnAmt">4.800</span> Öde (KDV dahil) →</button>
+        </div>
+      </div>
+
+      <!-- SUCCESS -->
+      <div class="pay-step-content" id="pstep-success">
+        <div class="success-screen">
+          <div class="success-ico">🎉</div>
+          <div class="success-title">Sipariş Oluşturuldu!</div>
+          <div class="success-sub">Ödemeniz alındı ve siparişiniz oluşturuldu. En kısa sürede size uygun bir creator atayacağız.</div>
+          <div class="success-order">
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:6px"><span style="color:var(--muted)">Sipariş No</span><strong>#BRF-2025</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:6px"><span style="color:var(--muted)">Paket</span><strong id="successPkg">—</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0"><span style="color:var(--muted)">Ödenen</span><strong style="color:var(--client)" id="successAmt">—</strong></div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-ghost" onclick="goBackFromPayment()">Panele Git</button>
+            <button class="btn btn-c" onclick="showToast('Onay e-postası gönderildi 📧','📧')">📧 Onay Gönder</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: ORDER SUMMARY -->
+    <div class="pay-right">
+      <div class="pay-right-title">📋 Sipariş Özeti</div>
+
+      <div id="sumPkgRow" class="sum-item">
+        <span class="sum-label">Paket</span>
+        <span class="sum-val" id="sumPkg">—</span>
+      </div>
+      <div class="sum-item">
+        <span class="sum-label">İçerik Adedi</span>
+        <span class="sum-val" id="sumCount">—</span>
+      </div>
+      <div class="sum-item">
+        <span class="sum-label">Platform</span>
+        <span class="sum-val">TikTok + Reels</span>
+      </div>
+      <div class="sum-item">
+        <span class="sum-label">Tahmini Teslimat</span>
+        <span class="sum-val">7 İş Günü</span>
+      </div>
+      <div class="sum-item">
+        <span class="sum-label">Revizyon Hakkı</span>
+        <span class="sum-val" id="sumRev">—</span>
+      </div>
+      <div class="sum-item">
+        <span class="sum-label">Ara Toplam</span>
+        <span class="sum-val" id="sumSub">—</span>
+      </div>
+      <div class="sum-item">
+        <span class="sum-label">KDV (%20)</span>
+        <span class="sum-val" id="sumVat">—</span>
+      </div>
+      <div class="sum-total">
+        <span class="sum-total-label">Toplam</span>
+        <span class="sum-total-val" id="sumTotal">—</span>
+      </div>
+
+      <div class="trust-badges" style="margin-top:32px;">
+        <div class="trust-badge"><div class="trust-badge-ico">🔒</div><span>256-bit SSL Şifrelemesi</span></div>
+        <div class="trust-badge"><div class="trust-badge-ico">✅</div><span>PCI DSS Uyumlu Ödeme</span></div>
+        <div class="trust-badge"><div class="trust-badge-ico">↩️</div><span>İçerik Onaylanana Kadar Para İade Garantisi</span></div>
+        <div class="trust-badge"><div class="trust-badge-ico">🛡️</div><span>Marka Güvenliği Koruması</span></div>
+        <div class="trust-badge"><div class="trust-badge-ico">📞</div><span>7/24 Destek Hattı</span></div>
+      </div>
+
+      <div style="margin-top:auto;padding-top:24px;border-top:1px solid var(--border);">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <img src="https://via.placeholder.com/50x30/1a1a2e/ffffff?text=VISA" style="border-radius:4px;height:24px;" alt="Visa">
+          <img src="https://via.placeholder.com/50x30/1a1a2e/ffffff?text=MC" style="border-radius:4px;height:24px;" alt="Mastercard">
+          <img src="https://via.placeholder.com/50x30/1a1a2e/ffffff?text=TROY" style="border-radius:4px;height:24px;" alt="Troy">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ CLIENT APP ══════════════════════════ -->
+<div class="screen app-layout" id="screen-client">
+  <aside class="sidebar" id="sb-client">
+    <div class="sidebar-logo"><div class="logo-ic lc">🛍️</div>Marka Paneli</div>
+    <div class="nav-section">
+      <span class="nav-lbl">Ana Menü</span>
+      <button class="nav-item ac" onclick="navClient('dashboard',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Genel Bakış
+      </button>
+      <button class="nav-item" onclick="navClient('orders',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+        Siparişlerim <span class="nbadge nb-c" id="ordersBadge" style="display:none">0</span>
+      </button>
+      <button class="nav-item" onclick="goToPayment()">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        Yeni Sipariş
+      </button>
+      <button class="nav-item" onclick="navClient('delivered',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        Teslim Alanlar
+      </button>
+      <span class="nav-lbl" style="margin-top:14px">Hesap</span>
+      <button class="nav-item" onclick="navClient('profile',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Profilim
+      </button>
+      <button class="nav-item" onclick="navClient('billing',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        Faturalar
+      </button>
+    </div>
+    <div class="sidebar-foot">
+      <div class="user-chip">
+        <div class="ava avc">MK</div>
+        <div><div class="u-name" id="clientUserName">—</div><div class="u-role">Marka</div></div>
+        <button class="logout-btn" onclick="logout()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+  <div class="main-wrap">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="pg-title" id="client-page-title">Genel Bakış</div>
+        <div class="pg-sub" id="client-page-sub">Hoş geldiniz, Mert!</div>
+      </div>
+      <div class="topbar-right">
+        <div class="notif-btn" onclick="showToast('3 yeni bildirim','📬')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <div class="notif-dot" style="background:var(--client)"></div>
+        </div>
+        <button class="btn btn-c" onclick="goToPayment()">+ Yeni Sipariş</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="page active" id="cp-dashboard">
+        <div class="sg sg4">
+          <div class="stat-card"><div class="st-ico">📦</div><div class="st-val" style="color:var(--client)">12</div><div class="st-lbl">Toplam Sipariş</div><div class="st-chg chg-up">↑ 3 bu ay</div></div>
+          <div class="stat-card"><div class="st-ico">⏳</div><div class="st-val">4</div><div class="st-lbl">Devam Eden</div></div>
+          <div class="stat-card"><div class="st-ico">✅</div><div class="st-val">7</div><div class="st-lbl">Tamamlanan</div></div>
+          <div class="stat-card"><div class="st-ico">💰</div><div class="st-val" style="color:var(--client)">₺24K</div><div class="st-lbl">Toplam Harcama</div></div>
+        </div>
+        <div class="sdiv"><span class="sdiv-t">Aktif Siparişler</span><div class="sdiv-l"></div><button class="btn btn-ghost btn-sm" onclick="navClient('orders',null)">Tümünü Gör</button></div>
+        <div class="oc">
+          <div class="oc-top"><div><div class="oc-id">#UGC-2024 · Profesyonel Paket</div><div class="oc-title">Yaz Koleksiyonu Tanıtım Videosu (5 adet)</div></div><span class="pill p-green">Üretimde</span></div>
+          <div style="font-size:12px;color:var(--muted)">Creator: <strong style="color:var(--text)">Zeynep Arslan</strong></div>
+          <div class="pbar" style="margin-top:10px"><div class="pfill" style="width:70%;background:var(--creator)"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px"><span>%70 tamamlandı</span><span>5 gün kaldı</span></div>
+          <div class="oc-actions">
+            <button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">📋 Brief</button>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('message')">💬 Mesaj</button>
+          </div>
+        </div>
+        <div class="oc">
+          <div class="oc-top"><div><div class="oc-id">#UGC-2023 · Standart Paket</div><div class="oc-title">Ürün Unboxing Reels (2 adet)</div></div><span class="pill p-yellow">Onay Bekliyor</span></div>
+          <div style="font-size:12px;color:var(--muted)">Creator: <strong style="color:var(--text)">Emre Demir</strong></div>
+          <div class="pbar" style="margin-top:10px"><div class="pfill" style="width:92%;background:var(--client)"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px"><span>Onayınız bekleniyor</span><span>Bugün teslim</span></div>
+          <div class="oc-actions">
+            <button class="btn btn-c btn-sm" onclick="openModal('contentReview')">▶ İncele</button>
+            <button class="btn btn-ghost btn-sm" onclick="openModal('revision')">↩ Revizyon</button>
+          </div>
+        </div>
+        <div class="sdiv" style="margin-top:8px"><span class="sdiv-t">Geçmiş Siparişler</span><div class="sdiv-l"></div></div>
+        <div class="card">
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Sipariş</th><th>Paket</th><th>Creator</th><th>Tutar</th><th>Tarih</th><th>Durum</th></tr></thead>
+            <tbody>
+              <tr><td><strong>#UGC-2018</strong></td><td>Profesyonel</td><td>Zeynep A.</td><td style="color:var(--client);font-weight:700">₺15.000</td><td style="color:var(--muted)">Mar 2026</td><td><span class="pill p-green">Tamamlandı</span></td></tr>
+              <tr><td><strong>#UGC-2015</strong></td><td>Başlangıç</td><td>Ali K.</td><td style="color:var(--client);font-weight:700">₺5.000</td><td style="color:var(--muted)">Mar 2026</td><td><span class="pill p-green">Tamamlandı</span></td></tr>
+              <tr><td><strong>#UGC-2009</strong></td><td>Standart</td><td>Deniz Y.</td><td style="color:var(--client);font-weight:700">₺8.000</td><td style="color:var(--muted)">Şub 2026</td><td><span class="pill p-gray">İptal</span></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="page" id="cp-orders">
+        <div class="sdiv"><span class="sdiv-t">Tüm Siparişler</span><div class="sdiv-l"></div><button class="btn btn-c btn-sm" onclick="goToPayment()">+ Yeni Sipariş</button></div>
+        <div class="card"><div class="tbl-wrap"><table>
+          <thead><tr><th>Sipariş</th><th>Başlık</th><th>Paket</th><th>Creator</th><th>Tutar</th><th>Durum</th><th>İşlem</th></tr></thead>
+          <tbody>
+            <tr><td><strong>#UGC-2024</strong></td><td>Yaz Koleksiyonu</td><td><span class="pill p-blue">Profesyonel</span></td><td style="color:var(--creator)">Zeynep A.</td><td style="font-weight:700">₺15.000</td><td><span class="pill p-green">Üretimde</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('orderDetail')">Detay</button></td></tr>
+            <tr><td><strong>#UGC-2023</strong></td><td>Unboxing Reels</td><td><span class="pill p-yellow">Standart</span></td><td style="color:var(--creator)">Emre D.</td><td style="font-weight:700">₺8.000</td><td><span class="pill p-yellow">Onay Bekliyor</span></td><td><button class="btn btn-c btn-sm" onclick="openModal('contentReview')">İncele</button></td></tr>
+            <tr><td><strong>#UGC-2022</strong></td><td>Sabah Rutini</td><td><span class="pill p-gray">Başlangıç</span></td><td style="color:var(--muted)">Atanmadı</td><td style="font-weight:700">₺5.000</td><td><span class="pill p-blue">Eşleşme Bekliyor</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('orderDetail')">Detay</button></td></tr>
+          </tbody>
+        </table></div></div>
+      </div>
+      <div class="page" id="cp-delivered">
+        <div class="sdiv"><span class="sdiv-t">Teslim Edilen İçerikler</span><div class="sdiv-l"></div></div>
+        <div class="card"><div class="tbl-wrap"><table>
+          <thead><tr><th>Başlık</th><th>Paket</th><th>Creator</th><th>Teslim</th><th>İndir</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Yaz Koleksiyonu — Set</strong></td><td>Profesyonel (5x)</td><td>Zeynep A.</td><td style="color:var(--muted)">20 Nis</td><td><button class="btn btn-ghost btn-sm" onclick="showToast('İndirme başladı','⬇️')">⬇ İndir</button></td></tr>
+            <tr><td><strong>Unboxing Final</strong></td><td>Standart (2x)</td><td>Emre D.</td><td style="color:var(--muted)">18 Nis</td><td><button class="btn btn-ghost btn-sm" onclick="showToast('İndirme başladı','⬇️')">⬇ İndir</button></td></tr>
+          </tbody>
+        </table></div></div>
+      </div>
+      <div class="page" id="cp-profile">
+        <div class="sdiv"><span class="sdiv-t">Marka Profili</span><div class="sdiv-l"></div><button class="btn btn-c btn-sm" onclick="saveBrandProfile()">Kaydet</button></div>
+        <div class="g2eq">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card">
+              <div class="card-head"><span class="card-title">Kişisel Bilgiler</span></div>
+              <div class="fg">
+                <div class="fgroup"><label>AD SOYAD</label><input id="pf-name" value=""></div>
+                <div class="fgroup"><label>E-POSTA</label><input id="pf-email" value=""></div>
+                <div class="fgroup"><label>TELEFON</label><input id="pf-phone" value=""></div>
+                <div class="fgroup"><label>ŞİFRE DEĞİŞTİR</label><input type="password" placeholder="Yeni şifre..."></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><span class="card-title">Marka Bilgileri</span></div>
+              <div class="fg">
+                <div class="fgroup fg1"><label>MARKA ADI</label><input id="pf-brandname" value="" placeholder="Markanızın adı" oninput="updateBrandPreview()"></div>
+                <div class="fgroup fg1"><label>WEBSİTE</label>
+                  <div style="display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+                    <span style="padding:0 12px;font-size:13px;color:var(--muted);border-right:1px solid var(--border);height:42px;display:flex;align-items:center">https://</span>
+                    <input id="pf-website" value="" style="border:none;border-radius:0;flex:1">
+                  </div>
+                </div>
+                <div class="fgroup"><label>İNSTAGRAM HESABI</label>
+                  <div style="display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+                    <span style="padding:0 12px;font-size:13px;color:var(--muted);border-right:1px solid var(--border);height:42px;display:flex;align-items:center">@</span>
+                    <input id="pf-instagram" value="" style="border:none;border-radius:0;flex:1">
+                  </div>
+                </div>
+                <div class="fgroup"><label>SEKTÖR</label>
+                  <select id="pf-sector" onchange="updateBrandPreview()"><option>Moda & Tekstil</option><option>Güzellik & Kozmetik</option><option>Teknoloji</option><option>Gıda & İçecek</option><option>Spor</option><option>Diğer</option></select>
+                </div>
+                <div class="fgroup fg1"><label>MARKA HAKKINDA</label>
+                  <textarea id="pf-about" style="min-height:80px" placeholder="Markanızı kısaca tanıtın. Creator'lar bu bilgiyi görür."></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card">
+              <div class="card-head"><span class="card-title">Hesap Özeti</span></div>
+              <div style="padding:18px;display:flex;flex-direction:column;gap:8px">
+                <div class="ibox"><div class="ibox-ico">📦</div><div><div class="ibox-lbl">Toplam Sipariş</div><div class="ibox-val" id="pf-total-orders">0</div></div></div>
+                <div class="ibox"><div class="ibox-ico">✅</div><div><div class="ibox-lbl">Tamamlanan</div><div class="ibox-val" id="pf-done-orders">0</div></div></div>
+                <div class="ibox"><div class="ibox-ico">💰</div><div><div class="ibox-lbl">Toplam Harcama</div><div class="ibox-val" style="color:var(--client)" id="pf-total-spend">₺0</div></div></div>
+                <div class="ibox"><div class="ibox-ico">⭐</div><div><div class="ibox-lbl">Ortalama Puan</div><div class="ibox-val">—</div></div></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><span class="card-title">Sosyal Medya Önizleme</span></div>
+              <div style="padding:18px">
+                <div id="brand-preview" style="background:var(--surface);border-radius:12px;padding:16px;display:flex;align-items:center;gap:12px;border:1px solid var(--border)">
+                  <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--client),#ea580c);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:16px">?</div>
+                  <div><div style="font-weight:700;font-size:14px">Marka Adı</div></div>
+                </div>
+                <div style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6">Creator'lar sipariş listesinde bu profili görür.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="page" id="cp-billing">
+        <div class="sdiv"><span class="sdiv-t">Faturalar</span><div class="sdiv-l"></div><button class="btn btn-ghost btn-sm" onclick="showToast('İndiriliyor','📥')">Tümünü İndir</button></div>
+        <div class="card"><div class="tbl-wrap"><table>
+          <thead><tr><th>Fatura</th><th>Paket</th><th>Tutar</th><th>KDV</th><th>Tarih</th><th>Durum</th><th>PDF</th></tr></thead>
+          <tbody>
+            <tr><td><strong>INV-0042</strong></td><td>Profesyonel</td><td style="font-weight:700">₺15.000</td><td style="color:var(--muted)">₺3.000</td><td style="color:var(--muted)">Nis 2026</td><td><span class="pill p-green">Ödendi</span></td><td><button class="btn btn-ghost btn-sm" onclick="showToast('PDF indiriliyor','📄')">📄</button></td></tr>
+            <tr><td><strong>INV-0038</strong></td><td>Başlangıç</td><td style="font-weight:700">₺5.000</td><td style="color:var(--muted)">₺1.000</td><td style="color:var(--muted)">Mar 2026</td><td><span class="pill p-green">Ödendi</span></td><td><button class="btn btn-ghost btn-sm" onclick="showToast('PDF indiriliyor','📄')">📄</button></td></tr>
+          </tbody>
+        </table></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ CREATOR APP ══════════════════════════ -->
+<div class="screen app-layout" id="screen-creator">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="logo-ic lr">🎬</div>Creator</div>
+    <div class="nav-section">
+      <span class="nav-lbl">Ana Menü</span>
+      <button class="nav-item ar" onclick="navCreator('dashboard',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-item" onclick="navCreator('discover',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Fırsatlar <span class="nbadge nb-r">12</span>
+      </button>
+      <button class="nav-item" onclick="navCreator('active',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+        Aktif İşlerim <span class="nbadge nb-r">3</span>
+      </button>
+      <button class="nav-item" onclick="navCreator('earnings',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Kazançlarım
+      </button>
+      <button class="nav-item" onclick="navCreator('profile',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Profilim
+      </button>
+    </div>
+    <div class="sidebar-foot">
+      <div class="user-chip">
+        <div class="ava avr">ZA</div>
+        <div><div class="u-name" id="creatorUserName">—</div><div class="u-role">Creator</div></div>
+        <button class="logout-btn" onclick="logout()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+  <div class="main-wrap">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="pg-title" id="creator-page-title">Dashboard</div>
+        <div class="pg-sub" id="creator-page-sub">Fırsatlar seni bekliyor 🎯</div>
+      </div>
+      <div class="topbar-right">
+        <div class="notif-btn" onclick="showToast('2 yeni teklif','📬')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <div class="notif-dot" style="background:var(--creator)"></div>
+        </div>
+        <button class="btn btn-r" onclick="openModal('uploadContent')">⬆ İçerik Yükle</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="page active" id="rp-dashboard">
+        <div class="sg sg4">
+          <div class="stat-card"><div class="st-ico">💵</div><div class="st-val" style="color:var(--creator)">₺11.200</div><div class="st-lbl">Bu Ay Kazanç</div><div class="st-chg chg-up">↑ %18</div></div>
+          <div class="stat-card"><div class="st-ico">📋</div><div class="st-val">3</div><div class="st-lbl">Aktif Proje</div></div>
+          <div class="stat-card"><div class="st-ico">⭐</div><div class="st-val" style="color:var(--client)">4.9</div><div class="st-lbl">Müşteri Puanı</div></div>
+          <div class="stat-card"><div class="st-ico">🎯</div><div class="st-val">94%</div><div class="st-lbl">Onay Oranı</div></div>
+        </div>
+        <div class="sdiv"><span class="sdiv-t">Açık Fırsatlar</span><div class="sdiv-l"></div><button class="btn btn-ghost btn-sm" onclick="navCreator('discover',null)">Tümünü Gör</button></div>
+        <div class="oc"><div class="oc-top"><div><div class="oc-id">🎮 Secretlab · Profesyonel Paket</div><div class="oc-title">Gaming Chair Unboxing Video</div></div><span class="pill p-green">Yeni</span></div><div class="oc-meta"><span>💰 <b style="color:var(--creator)">₺4.800</b></span><span>📅 14 gün</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('applyJob')">Başvur</button><button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">Brief</button></div></div>
+        <div class="oc"><div class="oc-top"><div><div class="oc-id">📱 Trendyol · Standart Paket</div><div class="oc-title">Uygulama Tanıtım Reels</div></div><span class="pill p-yellow">Son 3 Gün</span></div><div class="oc-meta"><span>💰 <b style="color:var(--creator)">₺2.900</b></span><span>📅 7 gün</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('applyJob')">Başvur</button><button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">Brief</button></div></div>
+      </div>
+      <div class="page" id="rp-discover">
+        <div class="sdiv"><span class="sdiv-t">Açık Fırsatlar (12)</span><div class="sdiv-l"></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="oc"><div class="oc-top"><div><div class="oc-id">🎮 Secretlab</div><div class="oc-title">Gaming Chair Unboxing</div></div><span class="pill p-green">Yeni</span></div><div class="oc-meta"><span>💰 <b style="color:var(--creator)">₺4.800</b></span><span>📅 14 gün</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('applyJob')">Başvur</button><button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">Brief</button></div></div>
+          <div class="oc"><div class="oc-top"><div><div class="oc-id">📱 Trendyol</div><div class="oc-title">Uygulama Reels 2x</div></div><span class="pill p-yellow">Son 3 Gün</span></div><div class="oc-meta"><span>💰 <b style="color:var(--creator)">₺2.900</b></span><span>📅 7 gün</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('applyJob')">Başvur</button><button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">Brief</button></div></div>
+          <div class="oc"><div class="oc-top"><div><div class="oc-id">👟 Nike Turkey</div><div class="oc-title">Yaz Koleksiyonu 5x Video</div></div><span class="pill p-green">Yeni</span></div><div class="oc-meta"><span>💰 <b style="color:var(--creator)">₺3.500</b></span><span>📅 12 gün</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('applyJob')">Başvur</button><button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">Brief</button></div></div>
+          <div class="oc"><div class="oc-top"><div><div class="oc-id">☕ Nescafé</div><div class="oc-title">Sabah Rutini Fotoğraf</div></div><span class="pill p-blue">5 Başvuru</span></div><div class="oc-meta"><span>💰 <b style="color:var(--creator)">₺1.400</b></span><span>📅 10 gün</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('applyJob')">Başvur</button><button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">Brief</button></div></div>
+        </div>
+      </div>
+      <div class="page" id="rp-active">
+        <div class="sdiv"><span class="sdiv-t">Aktif İşlerim</span><div class="sdiv-l"></div></div>
+        <div class="oc"><div class="oc-top"><div><div class="oc-id">#UGC-2024</div><div class="oc-title">Yaz Koleksiyonu Tanıtım Videosu</div></div><span class="pill p-green">Üretimde</span></div><div class="pbar" style="margin-top:10px"><div class="pfill" style="width:70%;background:var(--creator)"></div></div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px"><span>%70</span><span>5 gün kaldı</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('uploadContent')">⬆ Yükle</button><button class="btn btn-ghost btn-sm" onclick="openModal('message')">💬 Mesaj</button></div></div>
+      </div>
+      <div class="page" id="rp-earnings">
+        <div class="sdiv"><span class="sdiv-t">Kazançlarım</span><div class="sdiv-l"></div><button class="btn btn-r btn-sm" onclick="openModal('withdraw')">💸 Para Çek</button></div>
+        <div class="sg sg3" style="margin-bottom:20px">
+          <div class="stat-card"><div class="st-ico">💵</div><div class="st-val" style="color:var(--creator)">₺11.200</div><div class="st-lbl">Bu Ay</div><div class="st-chg chg-up">↑ %18</div></div>
+          <div class="stat-card"><div class="st-ico">🏦</div><div class="st-val" style="color:var(--creator)">₺8.650</div><div class="st-lbl">Çekilebilir</div></div>
+          <div class="stat-card"><div class="st-ico">📊</div><div class="st-val">₺68.400</div><div class="st-lbl">Toplam Kazanç</div></div>
+        </div>
+
+        <!-- CHART TOGGLE -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-head">
+            <span class="card-title">Kazanç Grafiği</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm chart-period active-period" onclick="setChartPeriod('monthly',this)">Aylık</button>
+              <button class="btn btn-ghost btn-sm chart-period" onclick="setChartPeriod('yearly',this)">Yıllık</button>
+            </div>
+          </div>
+          <div style="padding:20px">
+            <canvas id="earningsChart" height="180"></canvas>
+          </div>
+        </div>
+
+        <!-- TRANSACTION TABLE -->
+        <div class="card">
+          <div class="card-head"><span class="card-title">Son İşlemler</span></div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Proje</th><th>Marka</th><th>Tutar</th><th>Tarih</th><th>Durum</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Yaz Koleksiyonu</strong></td><td>Nike Turkey</td><td style="color:var(--creator);font-weight:700">₺3.500</td><td style="color:var(--muted)">Nis 2026</td><td><span class="pill p-green">Ödendi</span></td></tr>
+              <tr><td><strong>Glow Serisi Reels</strong></td><td>L'Oréal</td><td style="color:var(--creator);font-weight:700">₺2.200</td><td style="color:var(--muted)">Mar 2026</td><td><span class="pill p-green">Ödendi</span></td></tr>
+              <tr><td><strong>Gaming Chair</strong></td><td>Secretlab</td><td style="color:var(--creator);font-weight:700">₺4.800</td><td style="color:var(--muted)">Nis 2026</td><td><span class="pill p-yellow">Beklemede</span></td></tr>
+              <tr><td><strong>Sabah Rutini</strong></td><td>Nescafé</td><td style="color:var(--creator);font-weight:700">₺700</td><td style="color:var(--muted)">Şub 2026</td><td><span class="pill p-green">Ödendi</span></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- CREATOR PROFİL -->
+      <div class="page" id="rp-profile">
+        <div class="sdiv"><span class="sdiv-t">Profilim</span><div class="sdiv-l"></div><button class="btn btn-r btn-sm" onclick="saveCreatorProfile()">Kaydet</button></div>
+        <div class="g2eq">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card">
+              <div class="card-head"><span class="card-title">Kişisel Bilgiler</span></div>
+              <div class="fg">
+                <div class="fgroup"><label>AD</label><input value="Zeynep"></div>
+                <div class="fgroup"><label>SOYAD</label><input value="Arslan"></div>
+                <div class="fgroup"><label>E-POSTA</label><input value="zeynep@creator.com"></div>
+                <div class="fgroup"><label>TELEFON</label><input value="+90 532 000 0000"></div>
+                <div class="fgroup"><label>DOĞUM TARİHİ</label><input type="date" value="1998-03-15"></div>
+                <div class="fgroup"><label>CİNSİYET</label>
+                  <select><option>Kadın</option><option>Erkek</option><option>Belirtmek İstemiyorum</option></select>
+                </div>
+                <div class="fgroup fg1"><label>ADRES</label><input value="Kadıköy, İstanbul"></div>
+                <div class="fgroup"><label>İL</label>
+                  <select><option>İstanbul</option><option>Ankara</option><option>İzmir</option><option>Bursa</option><option>Diğer</option></select>
+                </div>
+                <div class="fgroup"><label>ŞİFRE DEĞİŞTİR</label><input type="password" placeholder="Yeni şifre..."></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><span class="card-title">Sosyal Medya & Portföy</span></div>
+              <div class="fg">
+                <div class="fgroup fg1"><label>İNSTAGRAM</label>
+                  <div style="display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+                    <span style="padding:0 12px;font-size:13px;color:var(--muted);border-right:1px solid var(--border);height:42px;display:flex;align-items:center">@</span>
+                    <input value="zeyneparslan" style="border:none;border-radius:0;flex:1">
+                  </div>
+                </div>
+                <div class="fgroup fg1"><label>TİKTOK</label>
+                  <div style="display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+                    <span style="padding:0 12px;font-size:13px;color:var(--muted);border-right:1px solid var(--border);height:42px;display:flex;align-items:center">@</span>
+                    <input value="zeynep.arslan" style="border:none;border-radius:0;flex:1">
+                  </div>
+                </div>
+                <div class="fgroup fg1"><label>YOUTUBE (opsiyonel)</label><input placeholder="Kanal linki..."></div>
+                <div class="fgroup fg1"><label>KENDİNİ TANIT</label>
+                  <textarea style="min-height:80px" placeholder="Markalar seni bu metinden tanıyacak...">Lifestyle ve beauty alanında içerik üretiyorum. Samimi ve eğlenceli içerikler yaratmayı seviyorum.</textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card">
+              <div class="card-head"><span class="card-title">Creator İstatistikleri</span></div>
+              <div style="padding:18px;display:flex;flex-direction:column;gap:8px">
+                <div class="ibox"><div class="ibox-ico">📦</div><div><div class="ibox-lbl">Tamamlanan Proje</div><div class="ibox-val">47</div></div></div>
+                <div class="ibox"><div class="ibox-ico">⭐</div><div><div class="ibox-lbl">Ortalama Puan</div><div class="ibox-val" style="color:var(--client)">4.9 / 5.0</div></div></div>
+                <div class="ibox"><div class="ibox-ico">🎯</div><div><div class="ibox-lbl">Onay Oranı</div><div class="ibox-val" style="color:var(--creator)">%94</div></div></div>
+                <div class="ibox"><div class="ibox-ico">⚡</div><div><div class="ibox-lbl">Ort. Teslimat</div><div class="ibox-val">4.2 gün</div></div></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><span class="card-title">Niş & Uzmanlık</span></div>
+              <div style="padding:18px">
+                <label style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1px;display:block;margin-bottom:10px">KATEGORİLER</label>
+                <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px">
+                  <span class="creator-tag" style="cursor:pointer;padding:6px 12px;font-size:12px">Lifestyle ✓</span>
+                  <span class="creator-tag" style="cursor:pointer;padding:6px 12px;font-size:12px">Beauty ✓</span>
+                  <span style="background:var(--surface);border:1px dashed var(--border);border-radius:6px;padding:6px 12px;font-size:12px;color:var(--muted);cursor:pointer">+ Ekle</span>
+                </div>
+                <label style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1px;display:block;margin-bottom:10px">IBAN (Ödeme için)</label>
+                <input placeholder="TR00 0000 0000 0000 0000 0000 00" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 13px;font-size:13px;font-family:'Montserrat',sans-serif;color:var(--text);outline:none;">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ ADMIN APP ══════════════════════════ -->
+<div class="screen app-layout" id="screen-admin">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="logo-ic la">⚙️</div>Admin</div>
+    <div class="nav-section">
+      <span class="nav-lbl">Yönetim</span>
+      <button class="nav-item aa" onclick="navAdmin('dashboard',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Genel Bakış
+      </button>
+      <button class="nav-item" onclick="navAdmin('allorders',this)">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+        Tüm Siparişler <span class="nbadge nb-a">47</span>
+      </button>
+      <button class="nav-item" onclick="navAdmin('clients',this)">Müşteriler</button>
+      <button class="nav-item" onclick="navAdmin('creators',this)">İçerik Üreticiler</button>
+      <button class="nav-item" onclick="navAdmin('disputes',this)">Anlaşmazlıklar <span class="nbadge nb-d">2</span></button>
+      <button class="nav-item" onclick="navAdmin('payments',this)">Ödemeler</button>
+      <button class="nav-item" onclick="navAdmin('settings',this)">Sistem Ayarları</button>
+    </div>
+    <div class="sidebar-foot">
+      <div class="user-chip">
+        <div class="ava ava-a">SA</div>
+        <div><div class="u-name">Selin Admin</div><div class="u-role">Super Admin</div></div>
+        <button class="logout-btn" onclick="logout()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+  <div class="main-wrap">
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="pg-title" id="admin-page-title">Genel Bakış</div>
+        <div class="pg-sub" id="admin-page-sub">Platform yönetimi</div>
+      </div>
+      <div class="topbar-right">
+        <div class="notif-btn" onclick="showToast('2 acil anlaşmazlık','⚠️')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/></svg>
+          <div class="notif-dot" style="background:var(--danger)"></div>
+        </div>
+        <button class="btn btn-a" onclick="openModal('addUser')">+ Kullanıcı Ekle</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="page active" id="ap-dashboard">
+        <div class="sg sg4">
+          <div class="stat-card"><div class="st-ico">💹</div><div class="st-val" style="color:var(--admin)" id="adm-gmv">₺0</div><div class="st-lbl">Aylık GMV</div></div>
+          <div class="stat-card"><div class="st-ico">👥</div><div class="st-val" id="adm-clients">0</div><div class="st-lbl">Müşteri</div></div>
+          <div class="stat-card"><div class="st-ico">🎬</div><div class="st-val" id="adm-creators">0</div><div class="st-lbl">Creator</div></div>
+          <div class="stat-card"><div class="st-ico">📦</div><div class="st-val" id="adm-orders">0</div><div class="st-lbl">Toplam Sipariş</div></div>
+        </div>
+        <div class="sdiv"><span class="sdiv-t">Son Siparişler</span><div class="sdiv-l"></div></div>
+        <div class="card"><div class="tbl-wrap"><table>
+          <thead><tr><th>Sipariş</th><th>Paket</th><th>Marka</th><th>Tutar</th><th>Durum</th><th>Tarih</th></tr></thead>
+          <tbody id="adm-orders-tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Henüz sipariş yok</td></tr></tbody>
+        </table></div></div>
+      </div>
+
+      <div class="page" id="ap-allorders">
+        <div class="sdiv"><span class="sdiv-t">Tüm Siparişler</span><div class="sdiv-l"></div></div>
+        <div class="card"><div class="tbl-wrap"><table>
+          <thead><tr><th>Sipariş</th><th>Paket</th><th>Marka</th><th>Tutar</th><th>Durum</th><th>Tarih</th></tr></thead>
+          <tbody id="adm-allorders-tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Henüz sipariş yok</td></tr></tbody>
+        </table></div></div>
+      </div>
+
+      <div class="page" id="ap-clients">
+        <div class="sdiv"><span class="sdiv-t">Müşteriler</span><div class="sdiv-l"></div></div>
+        <div class="card"><div class="tbl-wrap"><table>
+          <thead><tr><th>Ad</th><th>E-posta</th><th>Kayıt Tarihi</th></tr></thead>
+          <tbody id="adm-clients-tbody"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">Henüz müşteri yok</td></tr></tbody>
+        </table></div></div>
+      </div>
+
+      <div class="page" id="ap-creators">
+        <div class="sdiv"><span class="sdiv-t">Creator'lar</span><div class="sdiv-l"></div></div>
+        <div class="card"><div class="tbl-wrap"><table>
+          <thead><tr><th>Ad</th><th>E-posta</th><th>Kayıt Tarihi</th></tr></thead>
+          <tbody id="adm-creators-tbody"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">Henüz creator yok</td></tr></tbody>
+        </table></div></div>
+      </div>
+
+      <div class="page" id="ap-disputes">
+        <div class="sdiv"><span class="sdiv-t">Anlaşmazlıklar</span><div class="sdiv-l"></div></div>
+        <div style="text-align:center;padding:48px;color:var(--muted)">Henüz anlaşmazlık yok</div>
+      </div>
+
+      <div class="page" id="ap-payments">
+        <div class="sdiv"><span class="sdiv-t">Ödemeler</span><div class="sdiv-l"></div></div>
+        <div class="sg sg3">
+          <div class="stat-card"><div class="st-ico">💹</div><div class="st-val" style="color:var(--admin)" id="adm-pay-gmv">₺0</div><div class="st-lbl">Toplam GMV</div></div>
+          <div class="stat-card"><div class="st-ico">📦</div><div class="st-val" id="adm-pay-orders">0</div><div class="st-lbl">Sipariş</div></div>
+          <div class="stat-card"><div class="st-ico">⏳</div><div class="st-val" id="adm-pay-pending">0</div><div class="st-lbl">Bekleyen</div></div>
+        </div>
+      </div>
+
+      <div class="page" id="ap-settings">
+        <div class="sdiv"><span class="sdiv-t">Sistem Ayarları</span><div class="sdiv-l"></div><button class="btn btn-a btn-sm" onclick="showToast('Kaydedildi ✓','✅')">Kaydet</button></div>
+        <div class="card"><div class="fg">
+          <div class="fgroup"><label>KOMİSYON ORANI (%)</label><input type="number" value="20"></div>
+          <div class="fgroup"><label>MİNİMUM SİPARİŞ (₺)</label><input type="number" value="4000"></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ ADMIN GİZLİ GİRİŞ MODAL ══════════ -->
+<div class="modal-over" id="modal-adminLogin">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-head">
+      <span class="modal-title">⚙️ Admin Girişi</span>
+      <button class="mclose" onclick="closeModal('adminLogin')">✕</button>
+    </div>
+    <div style="padding:22px;">
+      <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:9px;padding:11px 14px;font-size:12px;color:var(--muted);margin-bottom:18px;">🔐 Bu alan sadece yetkili yöneticiler içindir.</div>
+      <div class="field"><label>ADMIN E-POSTA</label><input type="email" id="admin-email" placeholder="admin@ugc.com" value="admin@ugc.com"></div>
+      <div class="field"><label>ADMIN ŞİFRESİ</label><input type="password" id="admin-pass" placeholder="••••••••" value="admin2024"></div>
+      <div class="field"><label>GÜVENLİK KODU</label><input type="text" id="admin-code" placeholder="2FA Kodu" maxlength="6"></div>
+      <button class="lbtn" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;margin-top:4px;" onclick="doLoginAdmin()">Admin Girişi →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODALS ══════════ -->
+<div class="modal-over" id="modal-briefDetail">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title">Brief Detayları</span><button class="mclose" onclick="closeModal('briefDetail')">✕</button></div>
+    <div class="detail-body">
+      <div style="display:flex;gap:8px;margin-bottom:10px"><span class="pill p-green">Üretimde</span><span class="pill p-blue">5x Video</span><span class="pill p-yellow">Profesyonel Paket</span></div>
+      <div class="detail-title">Yaz Koleksiyonu Tanıtım Videosu</div>
+      <div class="detail-meta"><span>🛍️ Nike Turkey</span><span>💰 ₺15.000</span><span>📅 25 Nisan 2026</span></div>
+      <div class="detail-section"><h4>Açıklama</h4><div class="detail-text">Yaz 2026 koleksiyonumuzu tanıtan 5 adet UGC video içeriği. TikTok ve Instagram Reels formatında, 30-90 saniye.</div></div>
+      <div class="detail-section"><h4>Gereksinimler</h4><div class="detail-text">• Doğal ışık kullanımı<br>• Ürünlerin özelliklerinden bahsedilmeli<br>• Samimi, gerçek kullanıcı deneyimi hissi</div></div>
+    </div>
+    <div class="form-foot"><button class="btn btn-ghost" onclick="closeModal('briefDetail')">Kapat</button></div>
+  </div>
+</div>
+
+<div class="modal-over" id="modal-message">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title">Mesaj Gönder</span><button class="mclose" onclick="closeModal('message')">✕</button></div>
+    <div style="padding:20px">
+      <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:14px;max-height:180px;overflow-y:auto">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;text-align:center">— Geçmiş —</div>
+        <div style="background:var(--surface);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px">Merhaba, brief'i inceledim ✓</div>
+        <div style="background:rgba(16,185,129,0.1);border-radius:8px;padding:10px;font-size:13px;text-align:right">Harika, başarılar!</div>
+      </div>
+      <textarea style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:13.5px;outline:none;resize:none;height:80px;" placeholder="Mesajınızı yazın..."></textarea>
+    </div>
+    <div class="form-foot"><button class="btn btn-ghost" onclick="closeModal('message')">Kapat</button><button class="btn btn-c" onclick="closeModal('message');showToast('Mesaj gönderildi ✓','💬')">Gönder</button></div>
+  </div>
+</div>
+
+<div class="modal-over" id="modal-contentReview">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title">İçerik İnceleme</span><button class="mclose" onclick="closeModal('contentReview')">✕</button></div>
+    <div class="detail-body">
+      <div style="background:var(--surface2);border-radius:10px;padding:20px;text-align:center;margin-bottom:16px;border:2px dashed var(--border)">
+        <div style="font-size:36px;margin-bottom:8px">🎬</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">unboxing_reels_final.mp4</div>
+        <div style="font-size:12px;color:var(--muted)">142 MB · 00:47</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:12px" onclick="showToast('Video oynatılıyor','▶️')">▶ Oynat</button>
+      </div>
+    </div>
+    <div class="form-foot"><button class="btn btn-ghost" onclick="closeModal('contentReview');openModal('revision')">↩ Revizyon İste</button><button class="btn btn-c" onclick="closeModal('contentReview');showToast('Onaylandı! Ödeme serbest bırakıldı 🎉','✅')">✓ Onayla & Öde</button></div>
+  </div>
+</div>
+
+<div class="modal-over" id="modal-revision">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title">Revizyon Talebi</span><button class="mclose" onclick="closeModal('revision')">✕</button></div>
+    <div class="fg">
+      <div class="fgroup fg1"><label>NEDEN</label><select><option>Brief'e uymuyor</option><option>Kalite düşük</option><option>Ürün gösterilmemiş</option></select></div>
+      <div class="fgroup fg1"><label>AÇIKLAMA</label><textarea placeholder="Detaylar..."></textarea></div>
+    </div>
+    <div class="form-foot"><button class="btn btn-ghost" onclick="closeModal('revision')">İptal</button><button class="btn btn-c" onclick="closeModal('revision');showToast('Revizyon talebi gönderildi ✓','📝')">Gönder</button></div>
+  </div>
+</div>
+
+<div class="modal-over" id="modal-applyJob">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title">Projeye Başvur</span><button class="mclose" onclick="closeModal('applyJob')">✕</button></div>
+    <div class="fg">
+      <div class="fgroup fg1"><label>NEDEN UYGUNSUN?</label><textarea placeholder="Deneyim ve katkını anlat..."></textarea></div>
+      <div class="fgroup"><label>TAMAMLAMA SÜRESİ</label><select><option>3 gün</option><option>5 gün</option><option>7 gün</option></select></div>
+      <div class="fgroup"><label>TEKLİF FİYATI (₺)</label><input type="number" placeholder="4800"></div>
+    </div>
+    <div class="form-foot"><button class="btn btn-ghost" onclick="closeModal('applyJob')">İptal</button><button class="btn btn-r" onclick="closeModal('applyJob');showToast('Başvurun gönderildi 🎉','✅')">Başvur</button></div>
+  </div>
+</div>
+
+<div class="modal-over" id="modal-uploadContent">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title">İçerik Yükle</span><button class="mclose" onclick="closeModal('uploadContent')">✕</button></div>
+    <div class="fg">
+      <div class="fgroup fg1"><label>SİPARİŞ</label><select><option>#UGC-2024 — Yaz Koleksiyonu</option></select></div>
+      <div class="fgroup fg1"><label>DOSYA</label><input type="text" placeholder="video_final_v2.mp4"></div>
+      <div class="fgroup fg1"><label>NOT</label><textarea placeholder="Müşteriye not..."></textarea></div>
+    </div>
+    <div class="form-foot"><button class="btn btn-ghost" onclick="closeModal('uploadContent')">İptal</button><button class="btn btn-r" onclick="closeModal('uploadContent');showToast('İçerik yüklendi! 📤','✅')">Yükle</button></div>
+  </div>
+</div>
+
+<div class="modal-over" id="modal-withdraw">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title">Para Çek</span><button class="mclose" onclick="closeModal('withdraw')">✕</button></div>
+    <div class="fg">
+      <div class="fgroup fg1"><label>BAKİYE</label><input value="₺8.650" disabled style="color:var(--creator);font-weight:700;"></div>
+      <div class="fgroup fg1"><label>TUTAR (₺)</label><input type="number" placeholder="8650"></div>
+      <div class="fgroup fg1"><label>IBAN</label><input placeholder="TR00 0000 0000 0000 0000 0000 00"></div>
+    </div>
+    <div class="form-foot"><button class="btn btn-ghost" onclick="closeModal('withdraw')">İptal</button><button class="btn btn-r" onclick="closeModal('withdraw');showToast('Çekim talebi oluşturuldu ✓','💸')">Çekim Yap</button></div>
+  </div>
+</div>
+
+<div class="modal-over" id="modal-orderDetail">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title">Sipariş Detayı</span><button class="mclose" onclick="closeModal('orderDetail')">✕</button></div>
+    <div class="detail-body">
+      <div class="g2eq" style="margin-bottom:16px">
+        <div><div class="ibox"><div class="ibox-ico">👤</div><div><div class="ibox-lbl">Müşteri</div><div class="ibox-val">Mert Kaya</div></div></div></div>
+        <div><div class="ibox"><div class="ibox-ico">🎬</div><div><div class="ibox-lbl">Creator</div><div class="ibox-val" style="color:var(--creator)">Zeynep Arslan</div></div></div></div>
+        <div><div class="ibox"><div class="ibox-ico">📦</div><div><div class="ibox-lbl">Paket</div><div class="ibox-val">Profesyonel</div></div></div></div>
+        <div><div class="ibox"><div class="ibox-ico">💰</div><div><div class="ibox-lbl">Tutar</div><div class="ibox-val">₺15.000</div></div></div></div>
+      </div>
+    </div>
+    <div class="form-foot"><button class="btn btn-ghost" onclick="closeModal('orderDetail')">Kapat</button></div>
+  </div>
+</div>
+
+<div class="modal-over" id="modal-dispute">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title">Anlaşmazlık — #UGC-2022</span><button class="mclose" onclick="closeModal('dispute')">✕</button></div>
+    <div class="detail-body"><div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:14px;font-size:13px;line-height:1.7">⚠️ Can Şahin, Başlangıç paket videosu brief'e uymadığını iddia ediyor. Tutar: ₺5.000</div></div>
+    <div class="form-foot"><button class="btn btn-ghost" onclick="closeModal('dispute')">Kapat</button><button class="btn btn-c btn-sm" onclick="closeModal('dispute');showToast('Müşteri lehine ✓','✅')">Müşteri Lehine</button><button class="btn btn-r btn-sm" onclick="closeModal('dispute');showToast('Creator lehine ✓','✅')">Creator Lehine</button></div>
+  </div>
+</div>
+
+<div class="modal-over" id="modal-addUser">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title">Kullanıcı Ekle</span><button class="mclose" onclick="closeModal('addUser')">✕</button></div>
+    <div class="fg">
+      <div class="fgroup"><label>AD</label><input placeholder="Ad"></div>
+      <div class="fgroup"><label>SOYAD</label><input placeholder="Soyad"></div>
+      <div class="fgroup fg1"><label>E-POSTA</label><input type="email" placeholder="ornek@email.com"></div>
+      <div class="fgroup fg1"><label>ROL</label><select><option>Müşteri</option><option>Creator</option><option>Admin</option></select></div>
+    </div>
+    <div class="form-foot"><button class="btn btn-ghost" onclick="closeModal('addUser')">İptal</button><button class="btn btn-a" onclick="closeModal('addUser');showToast('Kullanıcı oluşturuldu ✓','✅')">Oluştur</button></div>
+  </div>
+</div>
+
+<div class="modal-over" id="modal-userDetail">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title">Kullanıcı Detayı</span><button class="mclose" onclick="closeModal('userDetail')">✕</button></div>
+    <div class="detail-body">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
+        <div class="ava avr" style="width:48px;height:48px;font-size:18px">ZA</div>
+        <div><div style="font-size:18px;font-weight:700">Zeynep Arslan</div><div style="font-size:12px;color:var(--muted)">zeynep@creator.com</div></div>
+        <span class="pill p-green" style="margin-left:auto">Aktif</span>
+      </div>
+      <div class="g2eq">
+        <div class="ibox"><div class="ibox-ico">📦</div><div><div class="ibox-lbl">Tamamlanan</div><div class="ibox-val">47</div></div></div>
+        <div class="ibox"><div class="ibox-ico">💰</div><div><div class="ibox-lbl">Kazanç</div><div class="ibox-val" style="color:var(--creator)">₺68.400</div></div></div>
+      </div>
+    </div>
+    <div class="form-foot"><button class="btn btn-danger btn-sm" onclick="closeModal('userDetail');showToast('Hesap askıya alındı','⛔')">Askıya Al</button><button class="btn btn-ghost" onclick="closeModal('userDetail')">Kapat</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toast-ico"></span><span id="toast-msg"></span></div>
+
+<script>
+// ── STATE ──
+let selectedPkg = null;
+let currentPayStep = 1;
+let adminClickCount = 0;
+let adminClickTimer = null;
+let fromScreen = 'client';
+
+// ── CLIENT AUTH TABS ──
+function switchClientTab(tab) {
+  ['login','register','forgot','reset'].forEach(t => {
+    document.getElementById('client-'+t).classList.remove('active');
+  });
+  document.getElementById('client-'+tab).classList.add('active');
+  const tabs = document.querySelectorAll('#client-tabs .auth-tab');
+  tabs.forEach(t => t.classList.remove('active-c'));
+  if (tab === 'login') tabs[0].classList.add('active-c');
+  if (tab === 'register') tabs[1].classList.add('active-c');
+}
+
+function switchCreatorTab(tab) {
+  ['login','register','forgot','reset'].forEach(t => {
+    document.getElementById('creator-'+t).classList.remove('active');
+  });
+  document.getElementById('creator-'+tab).classList.add('active');
+  const tabs = document.querySelectorAll('#creator-tabs .auth-tab');
+  tabs.forEach(t => t.classList.remove('active-r'));
+  if (tab === 'login') tabs[0].classList.add('active-r');
+  if (tab === 'register') tabs[1].classList.add('active-r');
+}
+
+// ── LOGIN ──
+async function updatePassword() {
+  const p1 = document.getElementById('new-pass')?.value;
+  const p2 = document.getElementById('new-pass2')?.value;
+  if (!p1 || p1.length < 6) { showToast('En az 6 karakter girin', '⚠️'); return; }
+  if (p1 !== p2) { showToast('Şifreler eşleşmiyor', '⚠️'); return; }
+  const { error } = await _sb.auth.updateUser({ password: p1 });
+  if (error) { showToast(error.message, '❌'); return; }
+  showToast('Şifre güncellendi! Giriş yapabilirsiniz ✓', '✅');
+  switchClientTab('login');
+}
+
+async function sendResetEmail(inputId, backTab, side) {
+  const email = document.getElementById(inputId)?.value.trim();
+  if (!email) { showToast('E-posta girin', '⚠️'); return; }
+  const { error } = await _sb.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://exquisite-fudge-ab69af.netlify.app/ugc-platform.html'
+  });
+  if (error) { showToast(error.message, '❌'); return; }
+  showToast('Sıfırlama maili gönderildi! 📧', '✅');
+  if (side === 'c') switchClientTab(backTab);
+  else switchCreatorTab(backTab);
+}
+
+function showScreen(role) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('screen-'+role);
+  if (el) el.classList.add('active');
+}
+
+async function doRegisterClient() {
+  const email    = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const confirm  = document.getElementById('reg-password2').value;
+  const name     = document.getElementById('reg-firstname').value + ' ' + document.getElementById('reg-lastname').value;
+  if (!email || !password) { showToast('E-posta ve şifre girin', '⚠️'); return; }
+  if (password !== confirm) { showToast('Şifreler eşleşmiyor', '⚠️'); return; }
+  if (password.length < 6) { showToast('Şifre en az 6 karakter olmalı', '⚠️'); return; }
+  await registerUser(email, password, 'client', name.trim());
+  switchClientTab('login');
+}
+
+async function doRegisterCreator() {
+  const email    = document.getElementById('creg-email').value.trim();
+  const password = document.getElementById('creg-password').value;
+  const name     = document.getElementById('creg-firstname').value + ' ' + document.getElementById('creg-lastname').value;
+  if (!email || !password) { showToast('E-posta ve şifre girin', '⚠️'); return; }
+  if (password.length < 6) { showToast('Şifre en az 6 karakter olmalı', '⚠️'); return; }
+  await registerUser(email, password, 'creator', name.trim());
+  switchCreatorTab('login');
+}
+
+function doLoginClient() {
+  const email = document.getElementById('cl-email').value;
+  const pass  = document.getElementById('cl-pass').value;
+  if (!email || !pass) { showToast('E-posta ve şifre girin', '⚠️'); return; }
+  loginUser(email, pass);
+}
+
+function doLoginCreator() {
+  const email = document.getElementById('cr-email').value;
+  const pass  = document.getElementById('cr-pass').value;
+  if (!email || !pass) { showToast('E-posta ve şifre girin', '⚠️'); return; }
+  loginUser(email, pass);
+}
+
+function doLoginAdmin() {
+  const email = document.getElementById('admin-email').value;
+  const pass  = document.getElementById('admin-pass').value;
+  loginUser(email, pass);
+  closeModal('adminLogin');
+}
+
+function logout() { logoutUser(); }
+
+// ── ADMIN HIDDEN TRIGGER ──
+function adminClick() {
+  adminClickCount++;
+  clearTimeout(adminClickTimer);
+  adminClickTimer = setTimeout(() => { adminClickCount = 0; }, 2000);
+  if (adminClickCount >= 5) {
+    adminClickCount = 0;
+    openModal('adminLogin');
+  }
+}
+
+// ── PAYMENT FLOW ──
+function goToPayment() {
+  fromScreen = 'client';
+  selectedPkg = null;
+  currentPayStep = 1;
+  // reset
+  document.querySelectorAll('.pkg-card').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('.pay-step-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('pstep1').classList.add('active');
+  updateStepUI(1);
+  showScreen('payment');
+}
+
+function goBackFromPayment() {
+  showScreen('client');
+}
+
+function selectPkg(id, name, count, priceStr, priceNum, icon) {
+  selectedPkg = { id, name, count, priceStr, priceNum, icon };
+  document.querySelectorAll('.pkg-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('pkg'+id).classList.add('selected');
+
+  // update summary
+  const vat = Math.round(priceNum * 0.2);
+  const total = priceNum + vat;
+  const revMap = { 1:'1 Revizyon', 2:'2 Revizyon', 3:'Sınırsız Revizyon', 4:'Sınırsız Revizyon' };
+  document.getElementById('sumPkg').textContent = name;
+  document.getElementById('sumCount').textContent = count;
+  document.getElementById('sumRev').textContent = revMap[id] || '1 Revizyon';
+  document.getElementById('sumSub').textContent = priceStr;
+  document.getElementById('sumVat').textContent = '₺'+vat.toLocaleString('tr-TR');
+  document.getElementById('sumTotal').textContent = '₺'+total.toLocaleString('tr-TR');
+  document.getElementById('payBtnAmt').textContent = total.toLocaleString('tr-TR');
+
+  // success page
+  document.getElementById('successPkg').textContent = name + ' — ' + count;
+  document.getElementById('successAmt').textContent = '₺'+total.toLocaleString('tr-TR');
+}
+
+function goPayStep(step) {
+  if (step === 2 && !selectedPkg) {
+    showToast('Lütfen bir paket seçin','⚠️');
+    return;
+  }
+  currentPayStep = step;
+  document.querySelectorAll('.pay-step-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('pstep'+step).classList.add('active');
+  updateStepUI(step);
+  window.scrollTo(0,0);
+}
+
+function updateStepUI(step) {
+  [1,2,3,4].forEach(i => {
+    const num  = document.getElementById('snum'+i);
+    const lbl  = document.getElementById('slbl'+i);
+    const line = document.getElementById('sline'+i);
+    if(!num) return;
+    num.className = 'step-num'; lbl.className = 'step-label';
+    if(line) line.className = 'step-line';
+    if(i < step){ num.classList.add('done'); if(line) line.classList.add('done'); }
+    if(i === step){ num.classList.add('active'); lbl.classList.add('active'); }
+  });
+}
+
+async function processPayment() {
+  const btn = document.querySelector('#pstep4 .next-pay');
+  if(btn){ btn.textContent='⏳ İşleniyor...'; btn.disabled=true; }
+
+  // Sipariş verisini topla
+  const orderData = {
+    pkgName: selectedPkg?.name || '',
+    priceNum: selectedPkg?.priceNum || 0,
+    campaignName: document.querySelector('#pstep2 input[placeholder*="Koleksiyonu"]')?.value || '',
+    productName:  document.querySelector('#pstep2 input[placeholder*="Sneaker"]')?.value || '',
+    productUrl:   document.querySelector('#pstep2 input[placeholder="https://..."]')?.value || '',
+    platform:     document.querySelector('#pstep2 select')?.value || '',
+    brief:        document.querySelector('#pstep2 textarea')?.value || '',
+    productStays: document.getElementById('pk-yes')?.classList.contains('active-chip') || false,
+  };
+
+  const saved = await saveOrderToSupabase(orderData);
+
+  if(btn){ btn.innerHTML='💳 Öde →'; btn.disabled=false; }
+  document.querySelectorAll('.pay-step-content').forEach(c=>c.classList.remove('active'));
+  document.getElementById('pstep-success').classList.add('active');
+  updateStepUI(5);
+  if (saved) showToast('Ödeme ve sipariş başarılı! 🎉','💳');
+}
+
+// Audience chips
+function toggleAud(btn) {
+  btn.classList.toggle('active-chip');
+}
+function toggleOther(btn) {
+  btn.classList.toggle('active-chip');
+  const inp = document.getElementById('audienceOther');
+  inp.style.display = inp.style.display==='none' ? 'block' : 'none';
+}
+// Product keep
+function selectProdKeep(btn, val) {
+  document.querySelectorAll('#pk-yes,#pk-no').forEach(b=>b.classList.remove('active-chip'));
+  btn.classList.add('active-chip');
+}
+// Creator mode
+function selectCreatorMode(btn, mode) {
+  document.querySelectorAll('#cm-auto,#cm-manual').forEach(b=>b.classList.remove('active-chip'));
+  btn.classList.add('active-chip');
+  document.getElementById('creatorList').style.display = mode==='manual' ? 'block' : 'block';
+}
+// Creator card select
+let selectedCreator = null;
+function selectCreatorCard(card, name) {
+  document.querySelectorAll('.cr-select-card').forEach(c=>{
+    c.style.borderColor='var(--border)';
+    c.style.background='var(--surface)';
+    c.querySelector('.cr-sel-check').textContent='○';
+  });
+  card.style.borderColor='var(--client)';
+  card.style.background='rgba(249,115,22,.04)';
+  card.querySelector('.cr-sel-check').textContent='●';
+  selectedCreator = name;
+}
+
+// ── CARD INPUT EFFECTS ──
+function formatCardNum(input) {
+  let v = input.value.replace(/\D/g,'').substring(0,16);
+  input.value = v.match(/.{1,4}/g)?.join(' ') || v;
+  const display = v.padEnd(16,'•').match(/.{1,4}/g).join(' ');
+  document.getElementById('cardNumDisplay').textContent = display;
+  // detect type
+  const first = v[0];
+  const ico = first==='4'?'💙 VISA':first==='5'?'🔴 MC':first==='6'?'🟡 TROY':'💳';
+  document.getElementById('cardTypeDisplay').textContent = ico;
+}
+
+function formatExp(input) {
+  let v = input.value.replace(/\D/g,'');
+  if (v.length >= 2) v = v.substring(0,2)+'/'+v.substring(2,4);
+  input.value = v;
+  document.getElementById('cardExpDisplay').textContent = v || 'MM/YY';
+}
+
+function updateCardName(val) {
+  document.getElementById('cardNameDisplay').textContent = val.toUpperCase() || 'AD SOYAD';
+}
+
+// ── NAV ──
+const clientMeta = {
+  dashboard:['Genel Bakış','Hoş geldiniz, Mert!'],
+  orders:['Siparişlerim','Tüm sipariş geçmişiniz'],
+  delivered:['Teslim Alanlar','İndirilebilir içerikler'],
+  profile:['Profilim','Hesap bilgileriniz'],
+  billing:['Faturalar','Fatura geçmişiniz'],
+};
+function navClient(page, btn) {
+  document.querySelectorAll('#screen-client .page').forEach(p => p.classList.remove('active'));
+  document.getElementById('cp-'+page).classList.add('active');
+  document.querySelectorAll('#sb-client .nav-item').forEach(n => n.classList.remove('ac'));
+  if (btn) btn.classList.add('ac');
+  const m = clientMeta[page] || [page,''];
+  document.getElementById('client-page-title').textContent = m[0];
+  document.getElementById('client-page-sub').textContent = m[1];
+}
+
+const creatorMeta = {
+  dashboard:['Dashboard','Yeni fırsatlar seni bekliyor 🎯'],
+  discover:['Fırsatları Keşfet','Tüm açık fırsatlar'],
+  active:['Aktif İşlerim','Devam eden projeler'],
+  earnings:['Kazançlarım','Kazanç ve ödeme detayları'],
+  profile:['Profilim','Hesap ve kişisel bilgilerim'],
+};
+// navCreator defined below with chart support
+
+const adminMeta = {
+  dashboard:['Genel Bakış','Platform yönetim paneli'],
+  allorders:['Tüm Siparişler',''],
+  clients:['Müşteriler',''],
+  creators:['Creator\'lar',''],
+  disputes:['Anlaşmazlıklar',''],
+  payments:['Ödemeler',''],
+  settings:['Sistem Ayarları',''],
+};
+function navAdmin(page, btn) {
+  document.querySelectorAll('#screen-admin .page').forEach(p => p.classList.remove('active'));
+  document.getElementById('ap-'+page).classList.add('active');
+  document.querySelectorAll('#screen-admin .nav-item').forEach(n => n.classList.remove('aa'));
+  if (btn) btn.classList.add('aa');
+  const m = adminMeta[page] || [page,''];
+  document.getElementById('admin-page-title').textContent = m[0];
+  document.getElementById('admin-page-sub').textContent = m[1];
+}
+
+// ── MODALS ──
+function openModal(id) { document.getElementById('modal-'+id).classList.add('open'); }
+function closeModal(id) { document.getElementById('modal-'+id).classList.remove('open'); }
+document.querySelectorAll('.modal-over').forEach(o => o.addEventListener('click', e => { if (e.target===o) o.classList.remove('open'); }));
+document.addEventListener('keydown', e => { if (e.key==='Escape') document.querySelectorAll('.modal-over.open').forEach(o => o.classList.remove('open')); });
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg, ico='✅') {
+  clearTimeout(toastTimer);
+  const t = document.getElementById('toast');
+  document.getElementById('toast-ico').textContent = ico;
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+// ── VERİ KAYDETME / YÜKLEME ──
+
+// Giriş yapınca kullanıcıya ait verileri yükle
+async function loadUserData(userId, role) {
+  // Profil bilgisini yükle ve ismi göster
+  const { data: profile } = await _sb.from('profiles').select('full_name, email').eq('id', userId).single();
+  const displayName = profile?.full_name || profile?.email?.split('@')[0] || '—';
+
+  if (role === 'client') {
+    const el = document.getElementById('clientUserName');
+    if (el) el.textContent = displayName;
+    // Topbar'ı da güncelle
+    const sub = document.getElementById('client-page-sub');
+    if (sub) sub.textContent = 'Hoş geldiniz, ' + displayName + '!';
+    await loadClientData(userId);
+  } else if (role === 'admin') {
+    await loadAdminData();
+  }
+}
+
+async function loadAdminData() {
+  // Tüm siparişleri çek
+  const { data: orders } = await _sb.from('orders').select('*').order('created_at', { ascending: false });
+  // Tüm profilleri çek
+  const { data: profiles } = await _sb.from('profiles').select('*').order('created_at', { ascending: false });
+
+  const clients  = (profiles || []).filter(p => p.role === 'client');
+  const creators = (profiles || []).filter(p => p.role === 'creator');
+  const allOrders = orders || [];
+  const gmv = allOrders.reduce((s, o) => s + (o.price || 0), 0);
+  const pending = allOrders.filter(o => o.status === 'pending').length;
+
+  // Stats
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  set('adm-gmv',      '₺' + gmv.toLocaleString('tr-TR'));
+  set('adm-clients',  clients.length);
+  set('adm-creators', creators.length);
+  set('adm-orders',   allOrders.length);
+  set('adm-pay-gmv',  '₺' + gmv.toLocaleString('tr-TR'));
+  set('adm-pay-orders', allOrders.length);
+  set('adm-pay-pending', pending);
+
+  // Son siparişler tablosu
+  const renderOrders = (tbodyId) => {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    tbody.innerHTML = allOrders.length ? allOrders.map(o => `
+      <tr>
+        <td><strong>#BRF-${o.id.slice(-4).toUpperCase()}</strong></td>
+        <td><span class="pill p-blue">${o.package || '—'}</span></td>
+        <td>${o.campaign_name || '—'}</td>
+        <td style="font-weight:700">₺${(o.price||0).toLocaleString('tr-TR')}</td>
+        <td><span class="pill ${statusClass(o.status)}">${statusLabel(o.status)}</span></td>
+        <td style="color:var(--muted)">${new Date(o.created_at).toLocaleDateString('tr-TR')}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Henüz sipariş yok</td></tr>';
+  };
+  renderOrders('adm-orders-tbody');
+  renderOrders('adm-allorders-tbody');
+
+  // Müşteriler
+  const clientsTbody = document.getElementById('adm-clients-tbody');
+  if (clientsTbody) {
+    clientsTbody.innerHTML = clients.length ? clients.map(p => `
+      <tr>
+        <td><strong>${p.full_name || '—'}</strong></td>
+        <td style="color:var(--muted)">${p.email || '—'}</td>
+        <td style="color:var(--muted)">${new Date(p.created_at).toLocaleDateString('tr-TR')}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">Henüz müşteri yok</td></tr>';
+  }
+
+  // Creator'lar
+  const creatorsTbody = document.getElementById('adm-creators-tbody');
+  if (creatorsTbody) {
+    creatorsTbody.innerHTML = creators.length ? creators.map(p => `
+      <tr>
+        <td><strong>${p.full_name || '—'}</strong></td>
+        <td style="color:var(--muted)">${p.email || '—'}</td>
+        <td style="color:var(--muted)">${new Date(p.created_at).toLocaleDateString('tr-TR')}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">Henüz creator yok</td></tr>';
+  }
+}
+
+async function loadUserData(userId, role) {
+  const { data: profile } = await _sb.from('profiles').select('full_name, email').eq('id', userId).single();
+  const displayName = profile?.full_name || profile?.email?.split('@')[0] || '—';
+
+  if (role === 'client') {
+    const el = document.getElementById('clientUserName');
+    if (el) el.textContent = displayName;
+    const sub = document.getElementById('client-page-sub');
+    if (sub) sub.textContent = 'Hoş geldiniz, ' + displayName + '!';
+    await loadClientData(userId);
+    await loadBrandProfile(userId);
+  } else if (role === 'creator') {
+    const el = document.getElementById('creatorUserName');
+    if (el) el.textContent = displayName;
+    await loadCreatorData(userId);
+  } else if (role === 'admin') {
+    await loadAdminData();
+  }
+}
+
+// MÜŞTERİ verilerini yükle
+async function loadClientData(userId) {
+  // Siparişleri yükle
+  const { data: brand } = await _sb.from('brands').select('id').eq('profile_id', userId).single();
+  
+  if (!brand) {
+    // Yeni kullanıcı — temiz panel, demo verileri gizle
+    clearClientDemoData();
+    return;
+  }
+
+  const { data: orders } = await _sb.from('orders')
+    .select('*').eq('brand_id', brand.id).order('created_at', { ascending: false });
+
+  renderClientOrders(orders || []);
+  // Badge güncelle
+  const badge = document.getElementById('ordersBadge');
+  if (badge && orders?.length) { badge.textContent = orders.length; badge.style.display = ''; }
+}
+
+// CREATOR verilerini yükle  
+async function loadCreatorData(userId) {
+  const { data: creator } = await _sb.from('creators').select('*').eq('profile_id', userId).single();
+  if (!creator) {
+    clearCreatorDemoData();
+    return;
+  }
+
+  const { data: earnings } = await _sb.from('earnings')
+    .select('*').eq('creator_id', creator.id).order('paid_at', { ascending: false });
+
+  renderCreatorEarnings(earnings || []);
+}
+
+// Yeni müşteri için demo verileri temizle
+function clearClientDemoData() {
+  // Dashboard aktif siparişleri temizle
+  const activeOrders = document.querySelectorAll('#cp-dashboard .oc');
+  activeOrders.forEach(o => o.remove());
+
+  // Stat kartlarını sıfırla
+  const statVals = document.querySelectorAll('#cp-dashboard .st-val');
+  statVals.forEach((v, i) => {
+    if (i === 0) v.textContent = '0';
+    if (i === 1) v.textContent = '0';
+    if (i === 2) v.textContent = '0';
+    if (i === 3) v.textContent = '₺0';
+  });
+
+  // Geçmiş sipariş tablosunu temizle
+  const tbody = document.querySelector('#cp-dashboard tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Henüz sipariş yok</td></tr>';
+
+  // Orders sayfasını da temizle
+  const ordTbody = document.querySelector('#cp-orders tbody');
+  if (ordTbody) ordTbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">Henüz sipariş yok</td></tr>';
+}
+
+// Yeni creator için demo verileri temizle
+function clearCreatorDemoData() {
+  const statVals = document.querySelectorAll('#rp-dashboard .st-val');
+  statVals.forEach((v, i) => {
+    if (i === 0) v.textContent = '₺0';
+    if (i === 1) v.textContent = '0';
+    if (i === 2) v.textContent = '0';
+    if (i === 3) v.textContent = '0%';
+  });
+
+  // Açık fırsatlar gerçek veri — bunlar herkese açık, dokunma
+  // Kazanç tablosunu temizle
+  const earnTbody = document.querySelector('#rp-earnings tbody');
+  if (earnTbody) earnTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">Henüz kazanç yok</td></tr>';
+}
+
+// Sipariş listesini render et
+function renderClientOrders(orders) {
+  clearClientDemoData();
+  if (orders.length === 0) return;
+
+  // Stat güncelle
+  const statVals = document.querySelectorAll('#cp-dashboard .st-val');
+  const total = orders.reduce((s, o) => s + (o.price || 0), 0);
+  const active = orders.filter(o => ['pending','matched','in_progress','review'].includes(o.status)).length;
+  const done = orders.filter(o => o.status === 'done').length;
+  if (statVals[0]) statVals[0].textContent = orders.length;
+  if (statVals[1]) statVals[1].textContent = active;
+  if (statVals[2]) statVals[2].textContent = done;
+  if (statVals[3]) statVals[3].textContent = '₺' + total.toLocaleString('tr-TR');
+
+  // Orders tablosu
+  const ordTbody = document.querySelector('#cp-orders tbody');
+  if (ordTbody) {
+    ordTbody.innerHTML = orders.map(o => `
+      <tr>
+        <td><strong>#BRF-${o.id.slice(-4).toUpperCase()}</strong></td>
+        <td>${o.campaign_name || '—'}</td>
+        <td><span class="pill p-gray">${o.package || '—'}</span></td>
+        <td style="color:var(--muted)">Atanmadı</td>
+        <td style="font-weight:700">₺${(o.price||0).toLocaleString('tr-TR')}</td>
+        <td><span class="pill ${statusClass(o.status)}">${statusLabel(o.status)}</span></td>
+        <td><button class="btn btn-ghost btn-sm">Detay</button></td>
+      </tr>
+    `).join('');
+  }
+}
+
+function statusClass(s) {
+  const m = { pending:'p-blue', matched:'p-blue', in_progress:'p-green', review:'p-yellow', done:'p-gray' };
+  return m[s] || 'p-gray';
+}
+function statusLabel(s) {
+  const m = { pending:'Bekliyor', matched:'Eşleşti', in_progress:'Üretimde', review:'İncelemede', done:'Tamamlandı' };
+  return m[s] || s;
+}
+
+// Kazanç listesini render et
+function renderCreatorEarnings(earnings) {
+  const total = earnings.reduce((s, e) => s + (e.amount || 0), 0);
+  const paid  = earnings.filter(e => e.status === 'paid').reduce((s, e) => s + (e.amount || 0), 0);
+
+  const statVals = document.querySelectorAll('#rp-earnings .st-val');
+  if (statVals[0]) statVals[0].textContent = '₺' + total.toLocaleString('tr-TR');
+  if (statVals[1]) statVals[1].textContent = '₺' + paid.toLocaleString('tr-TR');
+
+  const tbody = document.querySelector('#rp-earnings tbody');
+  if (tbody) {
+    tbody.innerHTML = earnings.length ? earnings.map(e => `
+      <tr>
+        <td><strong>Proje</strong></td>
+        <td>—</td>
+        <td style="color:var(--creator);font-weight:700">₺${(e.amount||0).toLocaleString('tr-TR')}</td>
+        <td style="color:var(--muted)">${e.paid_at ? new Date(e.paid_at).toLocaleDateString('tr-TR') : '—'}</td>
+        <td><span class="pill ${e.status==='paid'?'p-green':'p-yellow'}">${e.status==='paid'?'Ödendi':'Beklemede'}</span></td>
+      </tr>
+    `).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">Henüz kazanç yok</td></tr>';
+  }
+}
+
+// SİPARİŞ KAYDET
+async function saveOrderToSupabase(orderData) {
+  const { data: { user } } = await _sb.auth.getUser();
+  if (!user) return;
+
+  // Brand id bul veya oluştur
+  let { data: brand } = await _sb.from('brands').select('id').eq('profile_id', user.id).single();
+  if (!brand) {
+    const { data: newBrand } = await _sb.from('brands').insert({ profile_id: user.id }).select().single();
+    brand = newBrand;
+  }
+
+  const { error } = await _sb.from('orders').insert({
+    brand_id: brand.id,
+    package: orderData.pkgName,
+    price: orderData.priceNum,
+    status: 'pending',
+    campaign_name: orderData.campaignName || '',
+    product_name: orderData.productName || '',
+    product_url: orderData.productUrl || '',
+    platform: orderData.platform || '',
+    video_orientation: orderData.orientation || '',
+    video_duration: orderData.duration || '',
+    target_audience: orderData.audience || '',
+    age_range: orderData.ageRange || '',
+    gender_target: orderData.gender || '',
+    brief: orderData.brief || '',
+    product_stays: orderData.productStays || false,
+  });
+
+  if (error) { showToast('Sipariş kaydedilemedi: ' + error.message, '❌'); return false; }
+  showToast('Sipariş kaydedildi! 🎉', '✅');
+  return true;
+}
+
+// PROFİL KAYDET (Marka)
+async function saveBrandProfile() {
+  const { data: { user } } = await _sb.auth.getUser();
+  if (!user) return;
+
+  const fullName  = document.getElementById('pf-name')?.value || '';
+  const email     = document.getElementById('pf-email')?.value || '';
+  const brandName = document.getElementById('pf-brandname')?.value || '';
+  const website   = document.getElementById('pf-website')?.value || '';
+  const instagram = document.getElementById('pf-instagram')?.value || '';
+  const sector    = document.getElementById('pf-sector')?.value || '';
+  const about     = document.getElementById('pf-about')?.value || '';
+
+  await _sb.from('profiles').upsert({ id: user.id, full_name: fullName, email });
+
+  const { data: existing } = await _sb.from('brands').select('id').eq('profile_id', user.id).single();
+  if (existing) {
+    await _sb.from('brands').update({ brand_name: brandName, website, instagram, sector, about }).eq('id', existing.id);
+  } else {
+    await _sb.from('brands').insert({ profile_id: user.id, brand_name: brandName, website, instagram, sector, about });
+  }
+
+  // Önizlemeyi güncelle
+  updateBrandPreview();
+  showToast('Profil kaydedildi ✓', '✅');
+}
+
+function updateBrandPreview() {
+  const name = document.getElementById('pf-brandname')?.value || 'Marka Adı';
+  const ig   = document.getElementById('pf-instagram')?.value || '';
+  const web  = document.getElementById('pf-website')?.value || '';
+  const sec  = document.getElementById('pf-sector')?.value || '';
+  const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+
+  const prev = document.getElementById('brand-preview');
+  if (prev) {
+    prev.innerHTML = `
+      <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--client),#ea580c);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:16px;flex-shrink:0">${initials||'MK'}</div>
+      <div>
+        <div style="font-weight:700;font-size:14px">${name}</div>
+        <div style="font-size:12px;color:var(--muted)">${ig?'@'+ig+' · ':''}${web||''}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">${sec}</div>
+      </div>
+    `;
+  }
+}
+
+async function loadBrandProfile(userId) {
+  const { data: profile } = await _sb.from('profiles').select('full_name,email,phone').eq('id', userId).single();
+  const { data: brand }   = await _sb.from('brands').select('*').eq('profile_id', userId).single();
+
+  if (profile) {
+    const el = (id, val) => { const e = document.getElementById(id); if(e && val) e.value = val; };
+    el('pf-name',  profile.full_name);
+    el('pf-email', profile.email);
+    el('pf-phone', profile.phone);
+  }
+  if (brand) {
+    const el = (id, val) => { const e = document.getElementById(id); if(e && val) e.value = val; };
+    el('pf-brandname', brand.brand_name);
+    el('pf-website',   brand.website);
+    el('pf-instagram', brand.instagram);
+    el('pf-about',     brand.about);
+    const sec = document.getElementById('pf-sector');
+    if (sec && brand.sector) sec.value = brand.sector;
+    updateBrandPreview();
+  }
+}
+
+// PROFİL KAYDET (Creator)
+async function saveCreatorProfile() {
+  const { data: { user } } = await _sb.auth.getUser();
+  if (!user) return;
+
+  const instagram = document.getElementById('rp-profile')?.querySelector('input[value="zeyneparslan"]')?.value || '';
+  const tiktok    = document.getElementById('rp-profile')?.querySelector('input[value="zeynep.arslan"]')?.value || '';
+  const city      = document.getElementById('rp-profile')?.querySelector('input[value="Kadıköy, İstanbul"]')?.value || '';
+  const bio       = document.getElementById('rp-profile')?.querySelector('textarea')?.value || '';
+  const iban      = document.getElementById('rp-profile')?.querySelector('input[placeholder*="TR00"]')?.value || '';
+
+  const { data: existing } = await _sb.from('creators').select('id').eq('profile_id', user.id).single();
+  if (existing) {
+    await _sb.from('creators').update({ instagram, tiktok, city, bio, iban }).eq('id', existing.id);
+  } else {
+    await _sb.from('creators').insert({ profile_id: user.id, instagram, tiktok, city, bio, iban });
+  }
+  showToast('Profil kaydedildi ✓', '✅');
+}
+if(window.location.hash === '#screen-login') {
+  showScreen('login');
+}
+
+// ── EARNINGS CHART ──
+let chartInstance = null;
+const monthlyData = {
+  labels: ['Kas','Ara','Oca','Şub','Mar','Nis'],
+  data:   [4200, 5800, 6100, 7400, 9200, 11200]
+};
+const yearlyData = {
+  labels: ['2021','2022','2023','2024','2025','2026'],
+  data:   [18000, 29000, 38000, 47000, 56000, 68400]
+};
+
+function drawChart(period) {
+  const canvas = document.getElementById('earningsChart');
+  if(!canvas) return;
+  const d = period === 'yearly' ? yearlyData : monthlyData;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth; canvas.width = W; canvas.height = 180;
+  const pad = { t:16, r:16, b:36, l:52 };
+  const cw = W - pad.l - pad.r, ch = 180 - pad.t - pad.b;
+  const max = Math.max(...d.data) * 1.15;
+  ctx.clearRect(0, 0, W, 180);
+
+  // Grid lines
+  [0,.25,.5,.75,1].forEach(f => {
+    const y = pad.t + ch * (1 - f);
+    ctx.strokeStyle = '#e0dbd0'; ctx.lineWidth = 1;
+    ctx.setLineDash([4,4]); ctx.beginPath();
+    ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#8a8070'; ctx.font = '10px Montserrat';
+    ctx.textAlign = 'right';
+    ctx.fillText('₺'+(Math.round(max*f/1000))+'K', pad.l - 6, y + 3);
+  });
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ch);
+  grad.addColorStop(0, 'rgba(249,115,22,.18)');
+  grad.addColorStop(1, 'rgba(249,115,22,.01)');
+
+  const xs = d.labels.map((_,i) => pad.l + (i/(d.labels.length-1)) * cw);
+  const ys = d.data.map(v => pad.t + ch * (1 - v/max));
+
+  ctx.beginPath();
+  ctx.moveTo(xs[0], ys[0]);
+  xs.forEach((x,i) => { if(i>0) ctx.lineTo(x, ys[i]); });
+  ctx.lineTo(xs[xs.length-1], pad.t+ch);
+  ctx.lineTo(xs[0], pad.t+ch);
+  ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.moveTo(xs[0], ys[0]);
+  xs.forEach((x,i) => { if(i>0) ctx.lineTo(x, ys[i]); });
+  ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2.5;
+  ctx.setLineDash([]); ctx.stroke();
+
+  // Dots + labels
+  xs.forEach((x,i) => {
+    ctx.beginPath(); ctx.arc(x, ys[i], 4, 0, Math.PI*2);
+    ctx.fillStyle = '#f97316'; ctx.fill();
+    ctx.fillStyle = '#1a1612'; ctx.font = '10px Montserrat';
+    ctx.textAlign = 'center';
+    ctx.fillText(d.labels[i], x, pad.t + ch + 18);
+  });
+}
+
+function setChartPeriod(period, btn) {
+  document.querySelectorAll('.chart-period').forEach(b => b.classList.remove('active-period'));
+  btn.classList.add('active-period');
+  drawChart(period);
+}
+
+// Draw chart when earnings page becomes visible
+function navCreator(page, btn) {
+  document.querySelectorAll('#screen-creator .page').forEach(p => p.classList.remove('active'));
+  document.getElementById('rp-'+page).classList.add('active');
+  document.querySelectorAll('#screen-creator .nav-item').forEach(n => n.classList.remove('ar'));
+  if(btn) btn.classList.add('ar');
+  const m = creatorMeta[page] || [page,''];
+  document.getElementById('creator-page-title').textContent = m[0];
+  document.getElementById('creator-page-sub').textContent = m[1];
+  if(page === 'earnings') setTimeout(() => drawChart('monthly'), 50);
+}
+</script>
+<style>
+.active-period { background:var(--client) !important; color:#fff !important; border-color:var(--client) !important; }
+.chart-period { transition:all .2s; }
+.cr-select-card { display:flex; align-items:center; gap:12px; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:14px 16px; cursor:pointer; transition:all .2s; }
+.cr-select-card:hover { border-color:var(--client); }
+.cr-sel-check { font-size:18px; color:var(--client); width:24px; text-align:center; }
+.cr-select-av { width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; font-size:14px; flex-shrink:0; }
+.aud-chip { padding:8px 14px; border-radius:100px; border:1.5px solid var(--border); background:#fff; font-size:12.5px; font-weight:600; cursor:pointer; color:var(--muted); transition:all .18s; font-family:'Montserrat',sans-serif; }
+.aud-chip:hover { border-color:var(--client); color:var(--client); }
+.active-chip { background:rgba(249,115,22,.08) !important; border-color:var(--client) !important; color:var(--client) !important; }
+</style>
+</body>
+</html>
