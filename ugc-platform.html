@@ -17,20 +17,14 @@ const _sb = window.supabase.createClient(
 async function registerUser(email, password, role, full_name) {
   const { data, error } = await _sb.auth.signUp({ email, password });
   if (error) { showToast(error.message, '❌'); return; }
-  
   const uid = data.user?.id;
   if (!uid) { showToast('Kullanıcı oluşturulamadı', '❌'); return; }
-
+  const status = role === 'creator' ? 'pending' : 'active';
   const { error: pErr } = await _sb.from('profiles').upsert({
-    id: uid, email, role, full_name: full_name || ''
+    id: uid, email, role, full_name: full_name || '', status
   });
-
-  if (pErr) {
-    showToast('Profil kaydedilemedi: ' + pErr.message, '❌');
-    return;
-  }
-
-  showToast('Kayıt başarılı! Giriş yapabilirsiniz.', '✅');
+  if (pErr) { showToast('Profil kaydedilemedi: ' + pErr.message, '❌'); return; }
+  showToast(role === 'creator' ? 'Başvurunuz alındı! Admin onayı bekleniyor.' : 'Kayıt başarılı! Giriş yapabilirsiniz.', '✅');
 }
 
 async function loginUser(email, password) {
@@ -1647,18 +1641,28 @@ tr:hover td{background:rgba(0,0,0,.015);}
       </div>
 
       <div class="page" id="ap-clients">
-        <div class="sdiv"><span class="sdiv-t">Müşteriler</span><div class="sdiv-l"></div></div>
+        <div class="sdiv"><span class="sdiv-t">Müşteriler</span><div class="sdiv-l"></div><span id="adm-client-count" style="font-size:12px;color:var(--muted)"></span></div>
         <div class="card"><div class="tbl-wrap"><table>
-          <thead><tr><th>Ad</th><th>E-posta</th><th>Kayıt Tarihi</th></tr></thead>
-          <tbody id="adm-clients-tbody"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">Henüz müşteri yok</td></tr></tbody>
+          <thead><tr><th>Ad Soyad</th><th>E-posta</th><th>Sipariş</th><th>Harcama</th><th>Kayıt Tarihi</th><th>Durum</th></tr></thead>
+          <tbody id="adm-clients-tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Henüz müşteri yok</td></tr></tbody>
         </table></div></div>
       </div>
 
       <div class="page" id="ap-creators">
-        <div class="sdiv"><span class="sdiv-t">Creator'lar</span><div class="sdiv-l"></div></div>
+        <div class="sdiv"><span class="sdiv-t">Creator'lar</span><div class="sdiv-l"></div><span id="adm-creator-count" style="font-size:12px;color:var(--muted)"></span></div>
+        <!-- Bekleyen Başvurular -->
+        <div id="adm-applications-wrap" style="margin-bottom:16px">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Bekleyen Başvurular</div>
+          <div class="card"><div class="tbl-wrap"><table>
+            <thead><tr><th>Ad Soyad</th><th>E-posta</th><th>Başvuru Tarihi</th><th>İşlem</th></tr></thead>
+            <tbody id="adm-applications-tbody"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">Bekleyen başvuru yok</td></tr></tbody>
+          </table></div></div>
+        </div>
+        <!-- Onaylı Creator'lar -->
+        <div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Aktif Creator'lar</div>
         <div class="card"><div class="tbl-wrap"><table>
-          <thead><tr><th>Ad</th><th>E-posta</th><th>Kayıt Tarihi</th></tr></thead>
-          <tbody id="adm-creators-tbody"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">Henüz creator yok</td></tr></tbody>
+          <thead><tr><th>Ad Soyad</th><th>E-posta</th><th>Kayıt Tarihi</th><th>Durum</th><th>İşlem</th></tr></thead>
+          <tbody id="adm-creators-tbody"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">Henüz creator yok</td></tr></tbody>
         </table></div></div>
       </div>
 
@@ -2239,26 +2243,56 @@ async function loadAdminData() {
 
   // Müşteriler
   const clientsTbody = document.getElementById('adm-clients-tbody');
+  const clientCount  = document.getElementById('adm-client-count');
+  if (clientCount) clientCount.textContent = clients.length + ' kayıtlı müşteri';
   if (clientsTbody) {
-    clientsTbody.innerHTML = clients.length ? clients.map(p => `
-      <tr>
+    // Her müşterinin sipariş sayısını ve harcamasını hesapla
+    clientsTbody.innerHTML = clients.length ? clients.map(p => {
+      const clientOrders = allOrders.filter(o => o.brand_id); // basit
+      return `<tr>
         <td><strong>${p.full_name || '—'}</strong></td>
         <td style="color:var(--muted)">${p.email || '—'}</td>
+        <td>—</td>
+        <td>—</td>
         <td style="color:var(--muted)">${new Date(p.created_at).toLocaleDateString('tr-TR')}</td>
-      </tr>
-    `).join('') : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">Henüz müşteri yok</td></tr>';
+        <td><span class="pill p-green">Aktif</span></td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Henüz müşteri yok</td></tr>';
   }
 
-  // Creator'lar
-  const creatorsTbody = document.getElementById('adm-creators-tbody');
-  if (creatorsTbody) {
-    creatorsTbody.innerHTML = creators.length ? creators.map(p => `
+  // Creator'lar — bekleyen ve onaylı olarak ayır
+  const pending_creators = creators.filter(p => p.status === 'pending');
+  const active_creators  = creators.filter(p => p.status !== 'pending');
+
+  const creatorCount = document.getElementById('adm-creator-count');
+  if (creatorCount) creatorCount.textContent = active_creators.length + ' aktif, ' + pending_creators.length + ' bekleyen';
+
+  const appsTbody = document.getElementById('adm-applications-tbody');
+  if (appsTbody) {
+    appsTbody.innerHTML = pending_creators.length ? pending_creators.map(p => `
       <tr>
         <td><strong>${p.full_name || '—'}</strong></td>
         <td style="color:var(--muted)">${p.email || '—'}</td>
         <td style="color:var(--muted)">${new Date(p.created_at).toLocaleDateString('tr-TR')}</td>
+        <td style="display:flex;gap:6px;padding:8px 0">
+          <button class="btn btn-r btn-sm" onclick="approveCreator('${p.id}')">✓ Onayla</button>
+          <button class="btn btn-danger btn-sm" onclick="rejectCreator('${p.id}')">✗ Reddet</button>
+        </td>
       </tr>
-    `).join('') : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">Henüz creator yok</td></tr>';
+    `).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">Bekleyen başvuru yok</td></tr>';
+  }
+
+  const creatorsTbody = document.getElementById('adm-creators-tbody');
+  if (creatorsTbody) {
+    creatorsTbody.innerHTML = active_creators.length ? active_creators.map(p => `
+      <tr>
+        <td><strong>${p.full_name || '—'}</strong></td>
+        <td style="color:var(--muted)">${p.email || '—'}</td>
+        <td style="color:var(--muted)">${new Date(p.created_at).toLocaleDateString('tr-TR')}</td>
+        <td><span class="pill p-green">Aktif</span></td>
+        <td><button class="btn btn-danger btn-sm" onclick="rejectCreator('${p.id}')">Kaldır</button></td>
+      </tr>
+    `).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">Henüz creator yok</td></tr>';
   }
 }
 
@@ -2458,6 +2492,18 @@ async function saveOrderToSupabase(orderData) {
 }
 
 // PROFİL KAYDET (Marka)
+async function approveCreator(profileId) {
+  await _sb.from('profiles').update({ status: 'active' }).eq('id', profileId);
+  showToast('Creator onaylandı ✓', '✅');
+  await loadAdminData();
+}
+
+async function rejectCreator(profileId) {
+  await _sb.from('profiles').update({ status: 'rejected' }).eq('id', profileId);
+  showToast('Creator reddedildi', '❌');
+  await loadAdminData();
+}
+
 async function saveInvoiceInfo() {
   const { data: { user } } = await _sb.auth.getUser();
   if (!user) return;
