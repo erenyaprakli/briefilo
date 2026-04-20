@@ -1654,7 +1654,7 @@ tr:hover td{background:rgba(0,0,0,.015);}
         <div id="adm-applications-wrap" style="margin-bottom:16px">
           <div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">Bekleyen Başvurular</div>
           <div class="card"><div class="tbl-wrap"><table>
-            <thead><tr><th>Ad Soyad</th><th>E-posta</th><th>Başvuru Tarihi</th><th>İşlem</th></tr></thead>
+            <thead><tr><th>Ad Soyad</th><th>E-posta</th><th>Instagram</th><th>Niş</th><th>Başvuru Tarihi</th><th>İşlem</th></tr></thead>
             <tbody id="adm-applications-tbody"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">Bekleyen başvuru yok</td></tr></tbody>
           </table></div></div>
         </div>
@@ -1932,10 +1932,31 @@ async function doRegisterClient() {
 async function doRegisterCreator() {
   const email    = document.getElementById('creg-email').value.trim();
   const password = document.getElementById('creg-password').value;
-  const name     = document.getElementById('creg-firstname').value + ' ' + document.getElementById('creg-lastname').value;
+  const name     = (document.getElementById('creg-firstname').value + ' ' + document.getElementById('creg-lastname').value).trim();
+  const phone    = document.getElementById('creg-phone').value;
+  const niche    = document.getElementById('creg-niche').value;
+  const social   = document.getElementById('creg-social').value;
+  const instagram = social.startsWith('@') ? social.slice(1) : social;
+
   if (!email || !password) { showToast('E-posta ve şifre girin', '⚠️'); return; }
   if (password.length < 6) { showToast('Şifre en az 6 karakter olmalı', '⚠️'); return; }
-  await registerUser(email, password, 'creator', name.trim());
+
+  // Auth + profiles kaydı
+  const { data, error } = await _sb.auth.signUp({ email, password });
+  if (error) { showToast(error.message, '❌'); return; }
+  const uid = data.user?.id;
+  if (!uid) { showToast('Kullanıcı oluşturulamadı', '❌'); return; }
+
+  await _sb.from('profiles').upsert({ id: uid, email, role: 'creator', full_name: name, status: 'pending' });
+
+  // Creators tablosuna da kaydet
+  await _sb.from('creators').insert({
+    profile_id: uid,
+    instagram: instagram,
+    categories: [niche],
+  });
+
+  showToast('Başvurunuz alındı! Admin onayı bekleniyor. 🎉', '✅');
   switchCreatorTab('login');
 }
 
@@ -2267,19 +2288,29 @@ async function loadAdminData() {
   const creatorCount = document.getElementById('adm-creator-count');
   if (creatorCount) creatorCount.textContent = active_creators.length + ' aktif, ' + pending_creators.length + ' bekleyen';
 
+  // Creator detaylarını çek (instagram, niche)
+  const { data: creatorDetails } = await _sb.from('creators').select('profile_id, instagram, categories');
+  const crMap = {};
+  (creatorDetails || []).forEach(c => { crMap[c.profile_id] = c; });
+
   const appsTbody = document.getElementById('adm-applications-tbody');
   if (appsTbody) {
-    appsTbody.innerHTML = pending_creators.length ? pending_creators.map(p => `
-      <tr>
+    appsTbody.innerHTML = pending_creators.length ? pending_creators.map(p => {
+      const cr = crMap[p.id] || {};
+      const ig = cr.instagram ? '@' + cr.instagram : '—';
+      const niche = cr.categories?.[0] || '—';
+      return `<tr>
         <td><strong>${p.full_name || '—'}</strong></td>
         <td style="color:var(--muted)">${p.email || '—'}</td>
+        <td style="color:var(--muted)">${ig}</td>
+        <td><span class="pill p-gray">${niche}</span></td>
         <td style="color:var(--muted)">${new Date(p.created_at).toLocaleDateString('tr-TR')}</td>
         <td style="display:flex;gap:6px;padding:8px 0">
           <button class="btn btn-r btn-sm" onclick="approveCreator('${p.id}')">✓ Onayla</button>
           <button class="btn btn-danger btn-sm" onclick="rejectCreator('${p.id}')">✗ Reddet</button>
         </td>
-      </tr>
-    `).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">Bekleyen başvuru yok</td></tr>';
+      </tr>`;
+    }).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">Bekleyen başvuru yok</td></tr>';
   }
 
   const creatorsTbody = document.getElementById('adm-creators-tbody');
