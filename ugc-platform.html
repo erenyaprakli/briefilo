@@ -1448,17 +1448,17 @@ tr:hover td{background:rgba(0,0,0,.015);}
         <div class="oc"><div class="oc-top"><div><div class="oc-id">📱 Trendyol · Standart Paket</div><div class="oc-title">Uygulama Tanıtım Reels</div></div><span class="pill p-yellow">Son 3 Gün</span></div><div class="oc-meta"><span>💰 <b style="color:var(--creator)">₺2.900</b></span><span>📅 7 gün</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('applyJob')">Başvur</button><button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">Brief</button></div></div>
       </div>
       <div class="page" id="rp-discover">
-        <div class="sdiv"><span class="sdiv-t">Açık Fırsatlar (12)</span><div class="sdiv-l"></div></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="oc"><div class="oc-top"><div><div class="oc-id">🎮 Secretlab</div><div class="oc-title">Gaming Chair Unboxing</div></div><span class="pill p-green">Yeni</span></div><div class="oc-meta"><span>💰 <b style="color:var(--creator)">₺4.800</b></span><span>📅 14 gün</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('applyJob')">Başvur</button><button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">Brief</button></div></div>
-          <div class="oc"><div class="oc-top"><div><div class="oc-id">📱 Trendyol</div><div class="oc-title">Uygulama Reels 2x</div></div><span class="pill p-yellow">Son 3 Gün</span></div><div class="oc-meta"><span>💰 <b style="color:var(--creator)">₺2.900</b></span><span>📅 7 gün</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('applyJob')">Başvur</button><button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">Brief</button></div></div>
-          <div class="oc"><div class="oc-top"><div><div class="oc-id">👟 Nike Turkey</div><div class="oc-title">Yaz Koleksiyonu 5x Video</div></div><span class="pill p-green">Yeni</span></div><div class="oc-meta"><span>💰 <b style="color:var(--creator)">₺3.500</b></span><span>📅 12 gün</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('applyJob')">Başvur</button><button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">Brief</button></div></div>
-          <div class="oc"><div class="oc-top"><div><div class="oc-id">☕ Nescafé</div><div class="oc-title">Sabah Rutini Fotoğraf</div></div><span class="pill p-blue">5 Başvuru</span></div><div class="oc-meta"><span>💰 <b style="color:var(--creator)">₺1.400</b></span><span>📅 10 gün</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('applyJob')">Başvur</button><button class="btn btn-ghost btn-sm" onclick="openModal('briefDetail')">Brief</button></div></div>
+        <div class="sdiv"><span class="sdiv-t">Açık Fırsatlar</span><div class="sdiv-l"></div></div>
+        <div id="discover-list" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div style="text-align:center;color:var(--muted);padding:48px;grid-column:1/-1">Şu an açık fırsat yok</div>
         </div>
       </div>
+
       <div class="page" id="rp-active">
         <div class="sdiv"><span class="sdiv-t">Aktif İşlerim</span><div class="sdiv-l"></div></div>
-        <div class="oc"><div class="oc-top"><div><div class="oc-id">#UGC-2024</div><div class="oc-title">Yaz Koleksiyonu Tanıtım Videosu</div></div><span class="pill p-green">Üretimde</span></div><div class="pbar" style="margin-top:10px"><div class="pfill" style="width:70%;background:var(--creator)"></div></div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px"><span>%70</span><span>5 gün kaldı</span></div><div class="oc-actions"><button class="btn btn-r btn-sm" onclick="openModal('uploadContent')">⬆ Yükle</button><button class="btn btn-ghost btn-sm" onclick="openModal('message')">💬 Mesaj</button></div></div>
+        <div id="active-jobs-list">
+          <div style="text-align:center;color:var(--muted);padding:48px">Aktif iş yok</div>
+        </div>
       </div>
       <div class="page" id="rp-earnings">
         <div class="sdiv"><span class="sdiv-t">Kazançlarım</span><div class="sdiv-l"></div><button class="btn btn-r btn-sm" onclick="openModal('withdraw')">💸 Para Çek</button></div>
@@ -2344,6 +2344,7 @@ async function loadUserData(userId, role) {
     const el = document.getElementById('creatorUserName');
     if (el) el.textContent = displayName;
     await loadCreatorData(userId);
+    await loadCreatorJobs(userId);
   } else if (role === 'admin') {
     await loadAdminData();
   }
@@ -2441,17 +2442,21 @@ function renderClientOrders(orders) {
   // Orders tablosu
   const ordTbody = document.querySelector('#cp-orders tbody');
   if (ordTbody) {
-    ordTbody.innerHTML = orders.map(o => `
+    ordTbody.innerHTML = orders.length ? orders.map(o => `
       <tr>
         <td><strong>#BRF-${o.id.slice(-4).toUpperCase()}</strong></td>
         <td>${o.campaign_name || '—'}</td>
         <td><span class="pill p-gray">${o.package || '—'}</span></td>
-        <td style="color:var(--muted)">Atanmadı</td>
         <td style="font-weight:700">₺${(o.price||0).toLocaleString('tr-TR')}</td>
         <td><span class="pill ${statusClass(o.status)}">${statusLabel(o.status)}</span></td>
-        <td><button class="btn btn-ghost btn-sm">Detay</button></td>
+        <td>
+          ${o.status==='review' ? `
+            <button class="btn btn-r btn-sm" onclick="approveDelivery('${o.id}')">✓ Onayla</button>
+            <button class="btn btn-ghost btn-sm" onclick="requestRevision('${o.id}')">↩ Revizyon</button>
+          ` : o.delivery_url ? `<a href="${o.delivery_url}" target="_blank" class="btn btn-ghost btn-sm">⬇ İndir</a>` : '<span style="color:var(--muted);font-size:12px">—</span>'}
+        </td>
       </tr>
-    `).join('');
+    `).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Henüz sipariş yok</td></tr>';
   }
 }
 
@@ -2523,6 +2528,120 @@ async function saveOrderToSupabase(orderData) {
 }
 
 // PROFİL KAYDET (Marka)
+// ── SİPARİŞ AKIŞI ──
+
+// Admin: creator'a sipariş atar
+async function assignCreatorToOrder(orderId, creatorProfileId) {
+  await _sb.from('orders').update({ creator_id: creatorProfileId, status: 'matched' }).eq('id', orderId);
+  showToast('Creator atandı ✓', '✅');
+  await loadAdminData();
+}
+
+// Admin: sipariş durumunu günceller
+async function updateOrderStatus(orderId, status) {
+  await _sb.from('orders').update({ status }).eq('id', orderId);
+  showToast('Durum güncellendi ✓', '✅');
+  await loadAdminData();
+}
+
+// Creator: üstlendiği aktif işleri yükle
+async function loadCreatorJobs(userId) {
+  const { data: creator } = await _sb.from('creators').select('id').eq('profile_id', userId).single();
+
+  // Atanmış siparişler
+  const { data: assigned } = await _sb.from('orders')
+    .select('*').eq('creator_id', userId)
+    .in('status', ['matched','in_progress','review']);
+
+  // Açık siparişler (henüz creator atanmamış)
+  const { data: open } = await _sb.from('orders')
+    .select('*').eq('status', 'pending').is('creator_id', null);
+
+  // Fırsatlar
+  const discoverList = document.getElementById('discover-list');
+  if (discoverList) {
+    discoverList.innerHTML = (open||[]).length ? (open||[]).map(o => `
+      <div class="oc">
+        <div class="oc-top">
+          <div><div class="oc-id">#BRF-${o.id.slice(-4).toUpperCase()}</div><div class="oc-title">${o.campaign_name||'Kampanya'}</div></div>
+          <span class="pill p-green">Yeni</span>
+        </div>
+        <div class="oc-meta"><span>📦 ${o.package||'—'}</span><span>🎯 ${o.platform||'—'}</span></div>
+        <div style="font-size:12px;color:var(--muted);margin:8px 0;line-height:1.5">${(o.brief||'').slice(0,100)}${o.brief?.length>100?'...':''}</div>
+        <div class="oc-actions">
+          <button class="btn btn-r btn-sm" onclick="acceptJob('${o.id}')">✓ Kabul Et</button>
+        </div>
+      </div>
+    `).join('') : '<div style="text-align:center;color:var(--muted);padding:48px;grid-column:1/-1">Şu an açık fırsat yok</div>';
+  }
+
+  // Aktif işler
+  const activeList = document.getElementById('active-jobs-list');
+  if (activeList) {
+    activeList.innerHTML = (assigned||[]).length ? (assigned||[]).map(o => `
+      <div class="oc">
+        <div class="oc-top">
+          <div><div class="oc-id">#BRF-${o.id.slice(-4).toUpperCase()}</div><div class="oc-title">${o.campaign_name||'Kampanya'}</div></div>
+          <span class="pill ${statusClass(o.status)}">${statusLabel(o.status)}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin:8px 0">${o.platform||'—'} · ${o.package||'—'}</div>
+        ${o.status==='matched' ? `<div class="oc-actions"><button class="btn btn-r btn-sm" onclick="startJob('${o.id}')">🎬 Üretime Başla</button></div>` : ''}
+        ${o.status==='in_progress' ? `
+          <div style="margin:10px 0">
+            <label style="font-size:11px;font-weight:700;color:var(--muted)">TESLİM LİNKİ (Drive/WeTransfer)</label>
+            <input id="delivery-${o.id}" placeholder="https://..." style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;font-family:'Montserrat',sans-serif;margin-top:6px">
+          </div>
+          <div class="oc-actions"><button class="btn btn-r btn-sm" onclick="deliverJob('${o.id}')">📤 Teslim Et</button></div>
+        ` : ''}
+        ${o.status==='review' ? `<div style="margin-top:8px;font-size:12px;color:var(--muted)">⏳ Marka inceliyor...</div>` : ''}
+      </div>
+    `).join('') : '<div style="text-align:center;color:var(--muted);padding:48px">Aktif iş yok</div>';
+  }
+}
+
+// Creator: işi kabul et
+async function acceptJob(orderId) {
+  const { data: { user } } = await _sb.auth.getUser();
+  await _sb.from('orders').update({ creator_id: user.id, status: 'matched' }).eq('id', orderId);
+  showToast('İş kabul edildi! ✓', '✅');
+  await loadCreatorJobs(user.id);
+  navCreator('active', null);
+}
+
+// Creator: üretime başla
+async function startJob(orderId) {
+  await _sb.from('orders').update({ status: 'in_progress' }).eq('id', orderId);
+  showToast('Üretim başladı 🎬', '✅');
+  const { data: { user } } = await _sb.auth.getUser();
+  await loadCreatorJobs(user.id);
+}
+
+// Creator: teslim et
+async function deliverJob(orderId) {
+  const url = document.getElementById('delivery-'+orderId)?.value;
+  if (!url) { showToast('Teslim linkini girin', '⚠️'); return; }
+  await _sb.from('orders').update({ status: 'review', delivery_url: url, delivered_at: new Date().toISOString() }).eq('id', orderId);
+  showToast('İçerik teslim edildi! 📤', '✅');
+  const { data: { user } } = await _sb.auth.getUser();
+  await loadCreatorJobs(user.id);
+}
+
+// Marka: teslim edilen içeriği onayla
+async function approveDelivery(orderId) {
+  await _sb.from('orders').update({ status: 'done', approved_at: new Date().toISOString() }).eq('id', orderId);
+  showToast('İçerik onaylandı! 🎉', '✅');
+  const { data: { user } } = await _sb.auth.getUser();
+  await loadClientData(user.id);
+}
+
+// Marka: revizyon iste
+async function requestRevision(orderId) {
+  await _sb.from('orders').update({ status: 'in_progress' }).eq('id', orderId);
+  showToast('Revizyon talebi gönderildi', '⚠️');
+  const { data: { user } } = await _sb.auth.getUser();
+  await loadClientData(user.id);
+}
+
 async function approveCreator(profileId) {
   await _sb.from('profiles').update({ status: 'active' }).eq('id', profileId);
   showToast('Creator onaylandı ✓', '✅');
