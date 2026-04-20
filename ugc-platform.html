@@ -1360,14 +1360,31 @@ tr:hover td{background:rgba(0,0,0,.015);}
         </div>
       </div>
       <div class="page" id="cp-billing">
-        <div class="sdiv"><span class="sdiv-t">Faturalar</span><div class="sdiv-l"></div><button class="btn btn-ghost btn-sm" onclick="showToast('İndiriliyor','📥')">Tümünü İndir</button></div>
-        <div class="card"><div class="tbl-wrap"><table>
-          <thead><tr><th>Fatura</th><th>Paket</th><th>Tutar</th><th>KDV</th><th>Tarih</th><th>Durum</th><th>PDF</th></tr></thead>
-          <tbody>
-            <tr><td><strong>INV-0042</strong></td><td>Profesyonel</td><td style="font-weight:700">₺15.000</td><td style="color:var(--muted)">₺3.000</td><td style="color:var(--muted)">Nis 2026</td><td><span class="pill p-green">Ödendi</span></td><td><button class="btn btn-ghost btn-sm" onclick="showToast('PDF indiriliyor','📄')">📄</button></td></tr>
-            <tr><td><strong>INV-0038</strong></td><td>Başlangıç</td><td style="font-weight:700">₺5.000</td><td style="color:var(--muted)">₺1.000</td><td style="color:var(--muted)">Mar 2026</td><td><span class="pill p-green">Ödendi</span></td><td><button class="btn btn-ghost btn-sm" onclick="showToast('PDF indiriliyor','📄')">📄</button></td></tr>
-          </tbody>
-        </table></div></div>
+        <div class="sdiv"><span class="sdiv-t">Faturalar</span><div class="sdiv-l"></div></div>
+
+        <!-- Kurumsal Fatura Bilgileri -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-head"><span class="card-title">Kurumsal Fatura Bilgileri</span><button class="btn btn-c btn-sm" onclick="saveInvoiceInfo()">Kaydet</button></div>
+          <div class="fg" style="padding:16px">
+            <div class="fgroup"><label>FİRMA UNVANI</label><input id="inv-company" placeholder="Kaya Moda A.Ş."></div>
+            <div class="fgroup"><label>VERGİ NO</label><input id="inv-taxno" placeholder="1234567890"></div>
+            <div class="fgroup"><label>VERGİ DAİRESİ</label><input id="inv-taxoffice" placeholder="Kadıköy"></div>
+            <div class="fgroup fg1"><label>FATURA ADRESİ</label><input id="inv-address" placeholder="Adres..."></div>
+            <div class="fgroup"><label>İL</label><input id="inv-city" placeholder="İstanbul"></div>
+            <div class="fgroup"><label>ÜLKE</label><input id="inv-country" placeholder="Türkiye"></div>
+          </div>
+        </div>
+
+        <!-- Fatura Listesi -->
+        <div class="card">
+          <div class="card-head"><span class="card-title">Fatura Geçmişi</span></div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th>Fatura No</th><th>Paket</th><th>Tutar</th><th>KDV</th><th>Tarih</th><th>Durum</th></tr></thead>
+            <tbody id="billing-tbody">
+              <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Henüz fatura yok</td></tr>
+            </tbody>
+          </table></div>
+        </div>
       </div>
     </div>
   </div>
@@ -2256,6 +2273,8 @@ async function loadUserData(userId, role) {
     if (sub) sub.textContent = 'Hoş geldiniz, ' + displayName + '!';
     await loadClientData(userId);
     await loadBrandProfile(userId);
+    await loadInvoiceInfo(userId);
+    await loadInvoices(userId);
   } else if (role === 'creator') {
     const el = document.getElementById('creatorUserName');
     if (el) el.textContent = displayName;
@@ -2439,6 +2458,53 @@ async function saveOrderToSupabase(orderData) {
 }
 
 // PROFİL KAYDET (Marka)
+async function saveInvoiceInfo() {
+  const { data: { user } } = await _sb.auth.getUser();
+  if (!user) return;
+  const info = {
+    profile_id: user.id,
+    company:    document.getElementById('inv-company')?.value || '',
+    tax_no:     document.getElementById('inv-taxno')?.value || '',
+    tax_office: document.getElementById('inv-taxoffice')?.value || '',
+    address:    document.getElementById('inv-address')?.value || '',
+    city:       document.getElementById('inv-city')?.value || '',
+    country:    document.getElementById('inv-country')?.value || 'Türkiye',
+  };
+  const { data: ex } = await _sb.from('invoice_info').select('id').eq('profile_id', user.id).single();
+  if (ex) { await _sb.from('invoice_info').update(info).eq('profile_id', user.id); }
+  else    { await _sb.from('invoice_info').insert(info); }
+  showToast('Fatura bilgileri kaydedildi ✓', '✅');
+}
+
+async function loadInvoiceInfo(userId) {
+  const { data } = await _sb.from('invoice_info').select('*').eq('profile_id', userId).single();
+  if (!data) return;
+  const set = (id, val) => { const e = document.getElementById(id); if(e && val) e.value = val; };
+  set('inv-company', data.company); set('inv-taxno', data.tax_no);
+  set('inv-taxoffice', data.tax_office); set('inv-address', data.address);
+  set('inv-city', data.city); set('inv-country', data.country);
+}
+
+async function loadInvoices(userId) {
+  const { data: brand } = await _sb.from('brands').select('id').eq('profile_id', userId).single();
+  if (!brand) return;
+  const { data: orders } = await _sb.from('orders').select('*').eq('brand_id', brand.id).order('created_at', { ascending: false });
+  const tbody = document.getElementById('billing-tbody');
+  if (!tbody) return;
+  if (!orders?.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Henüz fatura yok</td></tr>'; return; }
+  tbody.innerHTML = orders.map((o, i) => {
+    const kdv = Math.round((o.price||0) * 0.2);
+    return `<tr>
+      <td><strong>INV-${String(i+1).padStart(4,'0')}</strong></td>
+      <td>${o.package||'—'}</td>
+      <td style="font-weight:700">₺${(o.price||0).toLocaleString('tr-TR')}</td>
+      <td style="color:var(--muted)">₺${kdv.toLocaleString('tr-TR')}</td>
+      <td style="color:var(--muted)">${new Date(o.created_at).toLocaleDateString('tr-TR')}</td>
+      <td><span class="pill p-green">Ödendi</span></td>
+    </tr>`;
+  }).join('');
+}
+
 async function saveBrandProfile() {
   const { data: { user } } = await _sb.auth.getUser();
   if (!user) return;
